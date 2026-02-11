@@ -1,0 +1,67 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Configure Git Remotes",
+            "type": "shell",
+            "windows": {
+                "command": "powershell",
+                "options": {
+                    "shell": {
+                        "executable": "${env:WINDIR}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+                        "args": [
+                            "-NoProfile",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-Command"
+                        ]
+                    }
+                },
+                "args": [
+                    "if (-not (Test-Path '${workspaceFolder}/.git/setup_done')) { & '${workspaceFolder}/.vscode/scripts/setup_git.ps1' }"
+                ]
+            },
+            "linux": {
+                "command": "sh",
+                "args": [
+                    "-c",
+                    "if [ ! -f '${workspaceFolder}/.git/setup_done' ]; then '${workspaceFolder}/.vscode/scripts/setup_git.sh'; fi"
+                ]
+            },
+            "osx": {
+                "command": "sh",
+                "args": [
+                    "-c",
+                    "if [ ! -f '${workspaceFolder}/.git/setup_done' ]; then '${workspaceFolder}/.vscode/scripts/setup_git.sh'; fi"
+                ]
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false,
+                "close": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Git Pull",
+            "type": "shell",
+            "command": "git pull",
+            "runOptions": {
+                "runOn": "folderOpen"
+            },
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared",
+                "close": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
