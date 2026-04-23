@@ -1,4 +1,5 @@
 #include "http/HttpResponse.hpp"
+#include <sstream>                  //ostringstream
 
 HttpResponse::HttpResponse(void): status_(HttpStatusCodes::OK){}
 
@@ -15,7 +16,7 @@ HttpResponse::setBody(std::string &body) {
 }
 
 std::string HttpResponse::serialize(void) const {
-    std::osstringstream ores;
+    std::ostringstream ores;
 
     // 1.1 or 1.0? it depend, let's just stick with 1.1 for now.
     ores << "HTTP/1.1" << std::static_cast<int>(status_) << " " << HttpStatusCodes::reasonPhrase(status_) << "\r\n";
