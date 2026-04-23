@@ -29,11 +29,11 @@ std::string HttpResponse::serialize(void) const {
     // Content-Length: we need to decide where to set it to avoid the overhead of find, 
     // for now let's just pretend that it not set.
     if (headers_.find("Content-Length") == _headers_end()) {
-        orse << "Content-Length: " << body_.size() << "\r\n";
+        ores << "Content-Length: " << body_.size() << "\r\n";
     }
 
     //end of headers;
-    orse << "\r\n";
+    ores << "\r\n";
 
     // write body
     ores << body_;
