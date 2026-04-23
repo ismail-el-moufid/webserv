@@ -22,14 +22,19 @@ std::string HttpResponse::serialize(void) const {
     ores << "HTTP/1.1" << std::static_cast<int>(status_) << " " << HttpStatusCodes::reasonPhrase(status_) << "\r\n";
 
     // write headers, but need more checks ...
-    for (std::map<std::string, std::string>::const_iterator it = headers_.begin(); it != headers_end(); ++it) {
+    for (std::map<std::string, std::string>::const_iterator it = headers_.begin(); it != headers_.end(); ++it) {
         ores << it->first << ": " << it->second << "\r\n";
     }
 
     // Content-Length: we need to decide where to set it to avoid the overhead of find, 
     // for now let's just pretend that it not set.
-    if (headers_.find("Content-Length") == _headers_end()) {
+    if (headers_.find("Content-Length") == headers_.end()) {
         ores << "Content-Length: " << body_.size() << "\r\n";
+    }
+
+    // Connection: default close, but it depend on the requested client;
+    if (headers_.find("Connection") == headres_.end()) {
+        ores << "Connection: close" << "\r\n";
     }
 
     //end of headers;
