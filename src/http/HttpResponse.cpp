@@ -44,3 +44,24 @@ std::string HttpResponse::serialize(void) const {
     ores << body_;
     return ores.str();
 }
+
+static std::string readFile(const char* filename) {
+    std::ifstream file(filename);
+    if (!file) return "";
+    
+    std::ostringstream buf;
+    buf << file.rdbuf();
+    return buf.str();
+}
+
+HttpResponse HttpResponse::HttpResponseError(HTTPStatus::Code status, const std::string &pagePath) {
+    HttpResponse res;
+
+    std::string body = readFile(pagePath.c_str());
+    if (body.empty()) {
+        // no file locate at pagePath
+        // serve default error page.
+    }
+    res.setStatus(status);
+    res.setBody(body)
+}

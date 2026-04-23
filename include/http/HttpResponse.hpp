@@ -15,6 +15,9 @@ class HttpResponse {
        // serialize: build the complete response.
        std::string serialize(void) const;
 
+       // build reponse error.
+       HttpResponse HttpResponseError(HTTPStatus::Code status, const std::string &pagePath)
+
 
     private:
         HTTPStatus::Code                        status_;
