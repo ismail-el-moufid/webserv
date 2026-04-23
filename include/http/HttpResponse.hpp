@@ -12,6 +12,9 @@ class HttpResponse {
        void setHeader(std::string &name, std::string &value);
        void setBody(std::string &body);
 
+       // serialize: build the complete response.
+       std::string serialize(void) const;
+
 
     private:
         HTTPStatus::Code                        status_;
