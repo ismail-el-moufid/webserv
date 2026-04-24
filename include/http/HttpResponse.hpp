@@ -16,7 +16,7 @@ class HttpResponse {
        // serialize: build the complete response.
        std::string serialize(void) const;
 
-       static HttpResponse HttpResponseError(HttpStatus::Code status, const std::string &pagePath)
+       static HttpResponse HttpResponseError(HttpStatus::Code status, const std::string &pagePath);
        static HttpResponse HttpResponseRedirect(HttpStatus::Code status, std::string& location);
 
 
