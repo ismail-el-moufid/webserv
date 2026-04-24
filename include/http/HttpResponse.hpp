@@ -8,7 +8,7 @@ class HttpResponse {
     public:
        HttpResponse(void);
 
-       void setStatus(HTTPStatus::Code status);
+       void setStatus(HttpStatus::Code status);
        void setHeader(std::string &name, std::string &value);
        void setContentType(std::string &type)
        void setBody(std::string &body);
@@ -17,11 +17,12 @@ class HttpResponse {
        std::string serialize(void) const;
 
        // build reponse error.
-       HttpResponse HttpResponseError(HTTPStatus::Code status, const std::string &pagePath)
+       HttpResponse HttpResponseError(HttpStatus::Code status, const std::string &pagePath)
+       HttpResponse HttpResponseRedirect(HttpStatus::Code status, std::string& location);
 
 
     private:
-        HTTPStatus::Code                        status_;
+        HttpStatus::Code                        status_;
         std::map<std::string, std::string>      headers_;
         std::string                             body_;
 }

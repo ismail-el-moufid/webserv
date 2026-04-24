@@ -87,3 +87,20 @@ HttpResponse HttpResponse::HttpResponseError(HTTPStatus::Code status, const std:
     
     return res;
 }
+
+HttpResponse HttpResponse::HttpResponseRedirect(HttpStatus::Code status, std::string &location) {
+    HttpResponse res;
+
+    if (location.empty()) {
+        location = "/";
+    }
+    res.setStatus(status);
+    res.setHeader("Location", location);
+    res.setContentType("text/html");
+    
+    std::ostringstream body;
+    body << "<!doctype html> <html lang=\"en-us\"><head><title>Redirect ...</title></head>"
+         << "<body> redirecting to <a href=\"" << location << "\"></a></body></html>";
+    res.setBody(body.str());
+    return res;
+}
