@@ -10,6 +10,7 @@ class HttpResponse {
 
        void setStatus(HTTPStatus::Code status);
        void setHeader(std::string &name, std::string &value);
+       void setContentType(std::string &type)
        void setBody(std::string &body);
 
        // serialize: build the complete response.

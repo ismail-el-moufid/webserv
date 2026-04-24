@@ -45,6 +45,14 @@ std::string HttpResponse::serialize(void) const {
     return ores.str();
 }
 
+void HttpResponse::setContentType(std::string& type) {
+    if (type.empty()) {
+        // or text/html? 
+        type = "text/plain";
+    }
+    headers_["Content-Type"] = type;
+}
+
 static std::string readFile(const char* filename) {
     std::ifstream file(filename);
     if (!file) return "";
@@ -74,5 +82,8 @@ HttpResponse HttpResponse::HttpResponseError(HTTPStatus::Code status, const std:
         body = defaultErrorBody(status);
     }
     res.setStatus(status);
-    res.setBody(body)
+    res.setContentType("text/html");
+    res.setBody(body);
+    
+    return res;
 }
