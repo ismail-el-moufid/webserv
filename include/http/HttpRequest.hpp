@@ -8,10 +8,16 @@
 
 
 
+
+
 #define MAX_REQUEST_LINE_SIZE	8192	// 8KB
 #define MAX_HEADER_SIZE			16384	// 16KB
 #define MAX_URI_SIZE			(MAX_REQUEST_LINE_SIZE - 15)
 #define VALID					0
+#define NEED_MORE_DATA			0
+
+
+
 
 class HttpRequest
 {
@@ -30,6 +36,7 @@ public:
 	const std::string							&version() const;
 	const std::map<std::string, std::string>	&headers() const;
 	const std::string							&body() const;
+	size_t										contentLength() const;
 	int											errorCode() const;
 
 private:
@@ -37,13 +44,10 @@ private:
 	// can't be default constructed, must provide max body size
 	HttpRequest();
 
-	// request line
 	bool parseRequestLine();
 
-	// headers
 	bool parseHeaders();
 
-	// body
 	void parseBody();
 
 	void cleanBuffer();

@@ -1,41 +1,41 @@
 #include "config/VirtualHost.hpp"	// VirtualHost
 #include "http/HttpStatusCodes.hpp"	// HttpStatus Codes
-#include "utils/NetworkUtils.hpp"	// resolve
 #include "utils/StringUtils.hpp"	// toLower
+
 #include <string>					// string
 #include <utility>					// make_pair, pair
+#include <algorithm>				// find
+#include <stdexcept>				// runtime_error
 
-VirtualHost::VirtualHost() : binds_(1, std::make_pair(std::string("127.0.0.1"), std::string("80"))), name_("default"), routes_(1, Route())
+VirtualHost::VirtualHost() : errorPages_() {}
+
+VirtualHost &VirtualHost::applyDefaults(VirtualHost &virtualHost)
 {
-	errorPages_.insert(std::make_pair(HttpStatus::BadRequest,						HtmlDir "/400.html"));
-	errorPages_.insert(std::make_pair(HttpStatus::Forbidden,						HtmlDir "/403.html"));
-	errorPages_.insert(std::make_pair(HttpStatus::NotFound,						HtmlDir "/404.html"));
-	errorPages_.insert(std::make_pair(HttpStatus::MethodNotAllowed,				HtmlDir "/405.html"));
-	errorPages_.insert(std::make_pair(HttpStatus::ContentTooLarge,				HtmlDir "/413.html"));
-	errorPages_.insert(std::make_pair(HttpStatus::URITooLong,						HtmlDir "/414.html"));
-	errorPages_.insert(std::make_pair(HttpStatus::IamATeapot,						HtmlDir "/418.html"));
-	errorPages_.insert(std::make_pair(HttpStatus::RequestHeaderFieldsTooLarge,	HtmlDir "/431.html"));
-	errorPages_.insert(std::make_pair(HttpStatus::InternalServerError,			HtmlDir "/500.html"));
-	errorPages_.insert(std::make_pair(HttpStatus::NotImplemented,					HtmlDir "/501.html"));
-	errorPages_.insert(std::make_pair(HttpStatus::GatewayTimeout,					HtmlDir "/504.html"));
-	errorPages_.insert(std::make_pair(HttpStatus::HTTPVersionNotSupported,		HtmlDir "/505.html"));
+	Route defaultRoute;
+
+	virtualHost.routes_.push_back(Route::applyDefaults(defaultRoute));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::BadRequest,						HtmlDir "/400.html"));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::Forbidden,						HtmlDir "/403.html"));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::NotFound,						HtmlDir "/404.html"));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::MethodNotAllowed,				HtmlDir "/405.html"));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::ContentTooLarge,				HtmlDir "/413.html"));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::URITooLong,						HtmlDir "/414.html"));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::IamATeapot,						HtmlDir "/418.html"));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::RequestHeaderFieldsTooLarge,	HtmlDir "/431.html"));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::InternalServerError,			HtmlDir "/500.html"));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::NotImplemented,					HtmlDir "/501.html"));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::GatewayTimeout,					HtmlDir "/504.html"));
+	virtualHost.errorPages_.insert(std::make_pair(HttpStatus::HTTPVersionNotSupported,		HtmlDir "/505.html"));
+
+	return virtualHost;
 }
 
-VirtualHost::VirtualHost(const std::string &name) : name_(name) { }
-
-void VirtualHost::addBind(const std::string &address, const std::string &port)
-{
-	if (!NetworkUtils::resolve(address, port))
-		throw std::runtime_error("Invalid listen configuration");
-	binds_.push_back(std::make_pair(address, port));
-}
-
-void VirtualHost::setName(const std::string &name)
+void VirtualHost::addName(const std::string &name)
 {
 	for (size_t i = 0; i < name.size(); ++i)
 		if (!std::isalnum(name.at(i)) && name.at(i) != '.' && name.at(i) != '-')
-			throw std::runtime_error("Invalid server name");
-	name_ = StringUtils::toLower(name);
+			throw std::runtime_error("Invalid server name: " + name);
+	names_.push_back(StringUtils::toLower(name));
 }
 
 void VirtualHost::addErrorPage(const std::string &code, const std::string &page)
@@ -45,9 +45,9 @@ void VirtualHost::addErrorPage(const std::string &code, const std::string &page)
 	errorPages_[HttpStatus::toCode(code)] = page;
 }
 
-void VirtualHost::addRoute(Route &route) { routes_.push_back(route); }
+void VirtualHost::addRoute(Route &route)					{ routes_.push_back(route); }
+bool VirtualHost::hasName(const std::string &name) const	{ return std::find(names_.begin(), names_.end(), StringUtils::toLower(name)) != names_.end(); }
 
-const std::vector<std::pair<std::string, std::string> >	&VirtualHost::binds()		const { return binds_; }
-const std::string										&VirtualHost::name()		const { return name_; }
+const std::vector<std::string>							&VirtualHost::names()		const { return names_; }
 const std::map<HttpStatus::Code, std::string>			&VirtualHost::errorPages()	const { return errorPages_; }
 const std::vector<Route>								&VirtualHost::routes()		const { return routes_; }

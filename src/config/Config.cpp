@@ -1,33 +1,64 @@
-#include "config/Config.hpp"		// Config, parse, parseServerBlock, tokenize
-#include "config/VirtualHost.hpp"
+#include "config/Config.hpp"
+#include "config/VirtualHost.hpp"	// NoDefaults, VirtualHost
+#include "utils/NetworkUtils.hpp"	// Interface, resolve
+#include "utils/StringUtils.hpp"	// toString
 
-#include <cstddef>					// size_t
-#include <cstdio>					// EOF
+#include <cstddef>
+#include <iostream>					// cerr, endl, streamsize
 #include <limits>					// numeric_limits
 #include <stdexcept>				// runtime_error
 
 typedef void (Config::*LocationDirectiveHandler)(Route &);
 typedef void (Config::*ServerDirectiveHandler)(VirtualHost &, Route &);
 
+Config::Config(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints) : tokenStream_(filePath)	{ parse(filePath, hosts, endpoints); }
+Config::Config(VirtualHosts &hosts, ListenEndpoints &endpoints) : tokenStream_(DefaultConfig)							{ parse(DefaultConfig, hosts, endpoints); }
+
+void Config::parse(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints)
+{
+	std::ifstream configIfs(filePath.c_str());
+	if (!configIfs)
+		throw std::runtime_error("Failed to open config file: " + filePath);
+
+	tokenize(configIfs);
+
+	InterfaceToServerNames registeredNames;
+	while (!tokenStream_.done())
+		parseServerBlock(hosts, endpoints, registeredNames);
+
+	if (hosts.empty())
+	{
+		Interface endpoint;
+		if (!NetworkUtils::resolve("localhost", "8080", endpoint))
+			throw std::runtime_error("Failed to resolve default endpoint");
+		VirtualHost virtualHost;
+		hosts.push_back(VirtualHost::applyDefaults(virtualHost));
+		endpoints[endpoint].push_back(&hosts.back());
+	}
+}
+
 void Config::tokenize(std::ifstream &configIfs)
 {
 	static const std::string delimiters("{};\n\t ");
-
 	int next;
 	while ((next = configIfs.peek()) != EOF)
 	{
 		switch (next)
 		{
-		case ' ': case '\t': case '\n': case '\r':												configIfs.ignore();	break;
-		case '{': tokenStream_.push(TokenStream::Token::BlockOpen);						configIfs.ignore();	break;
-		case '}': tokenStream_.push(TokenStream::Token::BlockClose);						configIfs.ignore();	break;
-		case ';': tokenStream_.push(TokenStream::Token::DirectiveDelimiter);				configIfs.ignore();	break;
-		case '#': configIfs.ignore(std::numeric_limits<std::streamsize>::max(), '\n');						break;
+		case '\n': ++tokenStream_.currentTokenizationLine; tokenStream_.currentTokenizationColumn = 0;															configIfs.ignore(); break;
+		case ' ': case '\t': case '\r': ++tokenStream_.currentTokenizationColumn;																				configIfs.ignore(); break;
+		case '{': tokenStream_.push(TokenStream::Token::BlockOpen); ++tokenStream_.currentTokenizationColumn;												configIfs.ignore(); break;
+		case '}': tokenStream_.push(TokenStream::Token::BlockClose); ++tokenStream_.currentTokenizationColumn;											configIfs.ignore(); break;
+		case ';': tokenStream_.push(TokenStream::Token::DirectiveDelimiter); ++tokenStream_.currentTokenizationColumn;									configIfs.ignore(); break;
+		case '#': configIfs.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); tokenStream_.currentTokenizationColumn = 0; ++tokenStream_.currentTokenizationLine;	break;
 		default:
 			TokenStream::Token word;
+			word.line	= tokenStream_.currentTokenizationLine;
+			word.column	= tokenStream_.currentTokenizationColumn;
 			while (next != EOF && delimiters.find(next) == std::string::npos)
 			{
 				word.content += (char)configIfs.get();
+				++tokenStream_.currentTokenizationColumn;
 				next = configIfs.peek();
 			}
 			tokenStream_.push(word);
@@ -36,31 +67,15 @@ void Config::tokenize(std::ifstream &configIfs)
 	}
 }
 
-const std::vector<VirtualHost> &Config::parse(const std::string &filePath)
-{
-	std::ifstream configIfs;
-	if (filePath.empty())
-		configIfs.open(DefaultConfig);
-	else
-		configIfs.open(filePath);
-	if (!configIfs)
-		throw std::runtime_error("Failed to open config file");
-	tokenize(configIfs);
-	while (!tokenStream_.done())
-		parseServerBlock();
-	if (virtualHosts_.empty())
-		virtualHosts_.push_back(VirtualHost());
-	return virtualHosts_;
-}
-
-void Config::parseServerBlock()
+void Config::parseServerBlock(VirtualHosts &hosts, ListenEndpoints &endpoints, InterfaceToServerNames &registeredNames)
 {
 	tokenStream_.expect("server");
 	tokenStream_.expect(TokenStream::Token::BlockOpen);
 
-	Route		defaults;
-	VirtualHost	virtualHost("defaultServerName");
-	size_t		serverBlockStart = tokenStream_.getPosition();
+	Route					defaults;
+	VirtualHost				virtualHost;
+	std::vector<Interface>	currentServerBlockEndpoints;
+	size_t					serverBlockStart = tokenStream_.getPosition();
 
 	while (!tokenStream_.accept(TokenStream::Token::BlockClose))
 	{
@@ -69,9 +84,16 @@ void Config::parseServerBlock()
 			tokenStream_.expect(TokenStream::Token::DirectiveWord);
 			tokenStream_.skipBlock();
 		}
+		else if (tokenStream_.accept("listen"))
+			parseListen(currentServerBlockEndpoints);
 		else if (!parseServerDirective(virtualHost, defaults) && !parseLocationDirective(defaults))
-			throw std::runtime_error("Unknown directive in server block: " + tokenStream_.peek().content);
+			throw std::runtime_error(tokenStream_.filePath + ":" + StringUtils::toString(tokenStream_.peek().line) +
+															":" + StringUtils::toString(tokenStream_.peek().column) +
+															": error: unknown directive '" + tokenStream_.peek().content + "'");
 	}
+
+	if (currentServerBlockEndpoints.empty())
+		throw std::runtime_error("Server block must have a listen directive");
 
 	tokenStream_.setPosition(serverBlockStart);
 	while (!tokenStream_.accept(TokenStream::Token::BlockClose))
@@ -82,33 +104,31 @@ void Config::parseServerBlock()
 			tokenStream_.skipDirective();
 	}
 
-	if (virtualHost.binds().empty())
-		throw std::runtime_error("Server block must have a listen directive");
-
 	if (virtualHost.routes().empty())
 		virtualHost.addRoute(defaults);
 
-	virtualHosts_.push_back(virtualHost);
+	hosts.push_back(virtualHost);
+	const std::vector<std::string> &names = hosts.back().names();
+	for (std::vector<Interface>::const_iterator it = currentServerBlockEndpoints.begin(); it != currentServerBlockEndpoints.end(); ++it)
+	{
+		endpoints[*it].push_back(&hosts.back());
+		for (size_t n = 0; n < names.size(); ++n)
+			if (!registeredNames[*it].insert(names[n]).second)
+				std::cerr << "warning: conflicting serverName '" << names[n] << "' on same interface" << std::endl;
+	}
 }
 
 void Config::parseLocationBlock(VirtualHost &virtualHost, Route &defaults)
 {
-	Route route(tokenStream_.expect(TokenStream::Token::DirectiveWord));
-
+	Route route(defaults);
+	route.setPath(tokenStream_.expect(TokenStream::Token::DirectiveWord));
 	tokenStream_.expect(TokenStream::Token::BlockOpen);
 
 	while (!tokenStream_.accept(TokenStream::Token::BlockClose))
 		if (!parseLocationDirective(route))
-			throw std::runtime_error("Unknown directive in location block: " + tokenStream_.peek().content);
-
-	if (route.redirected()
-		&& (!route.cgis().empty() || !route.upload().empty() ||
-		route.autoIndexed() || !route.indexFiles().empty() ||
-		!route.root().empty()))
-		throw std::runtime_error("Redirect cannot be combined with other directives");
-
-	if (!route.redirected())
-		route = defaults;
+			throw std::runtime_error(tokenStream_.filePath + ":" + StringUtils::toString(tokenStream_.peek().line) +
+															":" + StringUtils::toString(tokenStream_.peek().column) +
+															": error: unknown directive '" + tokenStream_.peek().content + "'");
 
 	virtualHost.addRoute(route);
 }
@@ -118,13 +138,27 @@ bool Config::parseServerDirective(VirtualHost &virtualHost, Route &defaults)
 	static std::map<std::string, ServerDirectiveHandler> handlers;
 	if (handlers.empty())
 	{
-		handlers["listen"]		= &Config::parseListen;
 		handlers["serverName"]	= &Config::parseServerName;
 		handlers["errorPage"]	= &Config::parseServerErrorPage;
 	}
+
 	std::map<std::string, ServerDirectiveHandler>::const_iterator handler = handlers.find(tokenStream_.peek().content);
 	if (handler == handlers.end())
+	{
+		static std::vector<std::string> locationOnlyHandlers;
+		if (locationOnlyHandlers.empty())
+		{
+			locationOnlyHandlers.push_back("cgi");
+			locationOnlyHandlers.push_back("upload");
+			locationOnlyHandlers.push_back("redirect");
+		}
+		if (std::find(locationOnlyHandlers.begin(), locationOnlyHandlers.end(), tokenStream_.peek().content) != locationOnlyHandlers.end())
+			throw std::runtime_error(tokenStream_.filePath + ":" + StringUtils::toString(tokenStream_.peek().line) +
+															":" + StringUtils::toString(tokenStream_.peek().column) +
+															": error: directive '" + tokenStream_.peek().content + "' not allowed at server level");
 		return false;
+	}
+
 	tokenStream_.expect(TokenStream::Token::DirectiveWord);
 	(this->*handler->second)(virtualHost, defaults);
 	return true;
@@ -152,53 +186,3 @@ bool Config::parseLocationDirective(Route &route)
 	(this->*handler->second)(route);
 	return true;
 }
-
-void Config::parseServerErrorPage(VirtualHost &virtualHost, Route &defaults)
-{
-	const std::string &code	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	const std::string &page	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
-	virtualHost.addErrorPage(code, page);
-	defaults.addErrorPage(code, page);
-}
-
-void Config::parseListen(VirtualHost &virtualHost, Route &)
-{
-	const std::string &address	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	const std::string &port		= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	virtualHost.addBind(address, port);
-	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
-}
-void Config::parseCgi(Route &route)
-{
-	const std::string &extension	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	const std::string &path			= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	route.addCgi(extension, path);
-	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
-}
-
-void Config::parseRedirect(Route &route)
-{
-	const std::string &code	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	const std::string &page	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	route.setRedirect(code, page);
-	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
-}
-
-void Config::parseLocationErrorPage(Route &route)
-{
-	const std::string &code	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	const std::string &page	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	route.addErrorPage(code, page);
-	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
-}
-
-void Config::parseServerName(VirtualHost &virtualHost, Route &)			{ virtualHost.setName(tokenStream_.expect(TokenStream::Token::DirectiveWord));	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
-
-void Config::parseUpload(Route &route)									{ route.setUpload(tokenStream_.expect(TokenStream::Token::DirectiveWord));		tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
-void Config::parseRoot(Route &route)									{ route.setRoot(tokenStream_.expect(TokenStream::Token::DirectiveWord));			tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
-void Config::parseAutoIndex(Route &route)								{ route.setAutoIndex(tokenStream_.expect(TokenStream::Token::DirectiveWord));		tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
-void Config::parseMaxBodySize(Route &route)								{ route.setMaxBodySize(tokenStream_.expect(TokenStream::Token::DirectiveWord));	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
-
-void Config::parseMethods(Route &route)									{ route.clearMethods(); while (!tokenStream_.accept(TokenStream::Token::DirectiveDelimiter)) route.addMethod(tokenStream_.expect(TokenStream::Token::DirectiveWord)); }
-void Config::parseIndex(Route &route)									{ while (!tokenStream_.accept(TokenStream::Token::DirectiveDelimiter)) route.addIndexFile(tokenStream_.expect(TokenStream::Token::DirectiveWord)); }

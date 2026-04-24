@@ -1,6 +1,9 @@
 #include "utils/StringUtils.hpp"	// toLower, trim, isAllDigits, hasInvalidChar
 
-std::string StringUtils::toLower(const std::string &s)
+namespace StringUtils
+{
+
+std::string toLower(const std::string &s)
 {
 	std::string result = s;
 	for (size_t i = 0; i < result.size(); ++i)
@@ -8,7 +11,7 @@ std::string StringUtils::toLower(const std::string &s)
 	return result;
 }
 
-std::string StringUtils::trim(const std::string &s)
+std::string trim(const std::string &s)
 {
 	size_t start = 0;
 	while (start < s.size() && std::isspace((unsigned char)s.at(start)))
@@ -19,18 +22,26 @@ std::string StringUtils::trim(const std::string &s)
 	return s.substr(start, end - start);
 }
 
-bool StringUtils::isAllDigits(const std::string &s, size_t start, size_t end)
+std::string normalizeSlashes(const std::string &target)
+{
+	std::string result;
+	for (size_t i = 0; i < target.size(); ++i)
+		if (target.at(i) != '/' || result.empty() || result.back() != '/')
+			result += target.at(i);
+	return result;
+}
+
+bool isAllDigits(const std::string &s, size_t start, size_t end)
 {
 	size_t realEnd = (end == std::string::npos) ? s.size() : end;
 	if (start >= realEnd)
 		return false;
 	for (size_t i = start; i < realEnd; i++)
-		if (!std::isdigit((unsigned char)s.at(i)))
+		if (!std::isdigit( static_cast<unsigned char>(s.at(i))))
 			return false;
 	return true;
 }
 
-bool StringUtils::hasInvalidChar(const std::string &s, const std::string &invalid, size_t from)
-{
-	return s.find_first_of(invalid, from) != std::string::npos;
+bool hasInvalidChar(const std::string &s, const std::string &invalid, size_t from) { return s.find_first_of(invalid, from) != std::string::npos; }
+
 }

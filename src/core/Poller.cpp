@@ -57,8 +57,8 @@ void Poller::remove(Socket &socket)									{ remove(socket.get()); }
 
 void Poller::add(Pipe &pipe, int events, FdContext fdContext)
 {
-	add(pipe.getReadFd(),  events & POLLIN,  fdContext);
-	add(pipe.getWriteFd(), events & POLLOUT, fdContext);
+	add(pipe.getReadFd(),	events & POLLIN,	fdContext);
+	add(pipe.getWriteFd(),	events & POLLOUT,	fdContext);
 }
 
 void Poller::remove(Pipe &pipe)

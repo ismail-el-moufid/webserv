@@ -8,8 +8,14 @@
 #include <vector>					// vector
 #include <map>						// map
 
+
+
 #define InstallDir "/usr/local/webserv"
 #define HtmlDir InstallDir "/html"
+
+
+
+
 
 
 
@@ -19,8 +25,8 @@ class Route
 public:
 
 	Route();
-	Route(const std::string &path);
-	Route & operator=(const Route &other);
+
+	static Route &applyDefaults(Route &route);
 
 	const std::string								&path() const;
 	size_t											maxBodySize() const;

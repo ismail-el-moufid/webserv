@@ -3,24 +3,14 @@
 #include "utils/StringUtils.hpp"	// isAllDigits
 #include <stdexcept>				// runtime_error
 
-Route::Route()							: maxBodySize_(0), path_("/"), methods_(1, "GET"), root_(HtmlDir), redirect_(false), autoindex_(false), indexFiles_(1, "welcome.html") { }
+Route::Route() : maxBodySize_(0), redirect_(false), autoindex_(false) {}
 
-Route::Route(const std::string &path) : maxBodySize_(0), path_(path), redirect_(false), autoindex_(false) {}
-
-Route &Route::operator=(const Route &other)
+Route &Route::applyDefaults(Route &route)
 {
-	if (root_.empty())			root_			= other.root_;
-	if (indexFiles_.empty())	indexFiles_		= other.indexFiles_;
-	if (methods_.empty())		methods_		= other.methods_;
-	if (!autoindex_)			autoindex_		= other.autoindex_;
-	if (!maxBodySize_)			maxBodySize_	= other.maxBodySize_;
-	if (upload_.empty())		upload_			= other.upload_;
-	if (cgis_.empty())			cgis_			= other.cgis_;
-
-	for (std::map<HttpStatus::Code, std::string>::const_iterator it = other.errorPages_.begin(); it != other.errorPages_.end(); ++it)
-		errorPages_.insert(*it); // won't override
-
-	return *this;
+	route.methods_.push_back("GET");
+	route.indexFiles_.push_back("welcome.html");
+	route.root_ = HtmlDir;
+	return route;
 }
 
 void Route::setMaxBodySize(const std::string &maxBodySize)
@@ -29,8 +19,8 @@ void Route::setMaxBodySize(const std::string &maxBodySize)
 		throw std::runtime_error("clientMaxBodySize must be a number");
 	maxBodySize_ = std::strtoul(maxBodySize.c_str(), NULL, 10);
 }
-void	Route::setPath(const std::string &path)									{ path_ = path; }
-void	Route::setRoot(const std::string &root)									{ root_ = root; }
+void	Route::setPath(const std::string &path)	{ path_ = StringUtils::normalizeSlashes(path); }
+void	Route::setRoot(const std::string &root)	{ (root_ = StringUtils::normalizeSlashes(root)).erase(root_.find_last_not_of('/') + 1); }
 
 
 void Route::addErrorPage(const std::string &code, const std::string &page)
@@ -47,13 +37,24 @@ void Route::addMethod(const std::string &method)
 	methods_.push_back(method);
 }
 
-void Route::setRedirect(const std::string &statusCode, const std::string &page)
+void Route::setRedirect(const std::string &code, const std::string &page)
 {
-	if (!HttpStatus::isRedirectCode(statusCode))
+	if (!cgis_.empty())
+		throw std::runtime_error("redirect and cgi are mutually exclusive");
+	if (!upload_.empty())
+		throw std::runtime_error("redirect and upload are mutually exclusive");
+	if (!HttpStatus::isRedirectCode(code))
 		throw std::runtime_error("Invalid redirect code");
 	redirect_		= true;
-	redirectCode_	= HttpStatus::toCode(statusCode);
+	redirectCode_	= HttpStatus::toCode(code);
 	redirectPage_	= page;
+}
+
+void Route::setUpload(const std::string &upload)
+{
+	if (redirect_)
+		throw std::runtime_error("redirect and upload are mutually exclusive");
+	upload_ = upload;
 }
 
 void Route::setAutoIndex(const std::string &autoindex)
@@ -63,9 +64,14 @@ void Route::setAutoIndex(const std::string &autoindex)
 	else							throw std::runtime_error("autoIndex must be 'on' or 'off'");
 }
 
-void	Route::addIndexFile(const std::string &indexFile)						{ indexFiles_.push_back(indexFile); }
-void	Route::addCgi(const std::string &extension, const std::string &path)	{ cgis_[extension] = path; }
-void	Route::setUpload(const std::string &upload)								{ upload_ = upload; }
+void Route::addCgi(const std::string &extension, const std::string &path)
+{
+	if (redirect_)
+		throw std::runtime_error("redirect and cgi are mutually exclusive");
+	cgis_[extension] = path;
+}
+
+void	Route::addIndexFile(const std::string &indexFile) { indexFiles_.push_back(indexFile); }
 void	Route::clearMethods() { methods_.clear(); }
 
 const std::string								&Route::path()			const { return path_; }

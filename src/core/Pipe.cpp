@@ -6,7 +6,7 @@
 
 void Pipe::closeRead()
 {
-	if (readFd_  != -1)
+	if (readFd_ != -1)
 		close(readFd_);
 	readFd_ = -1;
 }
@@ -31,13 +31,13 @@ Pipe::Pipe() : readFd_(-1), writeFd_(-1)
 		throw std::runtime_error("Failed to set FD_CLOEXEC and O_NONBLOCK flags on pipe file descriptors");
 	}
 
-	readFd_  = fds[0];
-	writeFd_ = fds[1];
+	readFd_		= fds[0];
+	writeFd_	= fds[1];
 }
 Pipe::~Pipe()
 {
-	if (readFd_  != -1) close(readFd_);
-	if (writeFd_ != -1) close(writeFd_);
+	if (readFd_		!= -1) close(readFd_);
+	if (writeFd_	!= -1) close(writeFd_);
 }
 
 int Pipe::getReadFd() const

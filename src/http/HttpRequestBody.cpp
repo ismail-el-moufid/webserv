@@ -65,8 +65,8 @@ bool parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, std::string &
 
 bool parseFixedBody(std::string &rawBuffer, size_t &bytesParsed, std::string &body, bool &complete, size_t contentLength)
 {
-	size_t bytesAvailable = rawBuffer.size() - bytesParsed;
-	size_t bytesToParse   = std::min(bytesAvailable, contentLength - body.size());
+	size_t bytesAvailable	= rawBuffer.size() - bytesParsed;
+	size_t bytesToParse		= std::min(bytesAvailable, contentLength - body.size());
 
 	if (bytesToParse == 0)
 		return false;

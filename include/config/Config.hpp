@@ -1,17 +1,24 @@
 #pragma once
 
 #include "config/VirtualHost.hpp"	// VirtualHost
+#include "utils/NetworkUtils.hpp"	// Interface, InterfaceCompare
 
-
+#include <cstddef>
 #include <string>					// string
+#include <deque>					// deque
 #include <vector>					// vector
+#include <map>						// map
+#include <unordered_set>			// unordered_set
 #include <fstream>					// ifstream
-
 
 #define DefaultConfig InstallDir "/conf/webserv.conf"
 
 
 
+
+typedef std::deque<VirtualHost>																	VirtualHosts;
+typedef std::map<Interface, std::vector<VirtualHost *>, NetworkUtils::InterfaceCompare>			ListenEndpoints;
+typedef std::map<Interface, std::unordered_set<std::string>, NetworkUtils::InterfaceCompare>	InterfaceToServerNames;
 
 class Config
 {
@@ -20,86 +27,84 @@ public:
 
 	class TokenStream
 	{
+
 	public:
 
 		class Token
 		{
+
 		public:
 
-			enum Type
-			{
-				DirectiveWord,
-				DirectiveDelimiter,
-				BlockOpen,
-				BlockClose
-			};
+			enum Type { DirectiveWord, DirectiveDelimiter, BlockOpen, BlockClose };
 
 			Token();
-			Token(const std::string &inputContent);
-			Token(Type inputType);
+			Token(const std::string &content);
+			Token(Type type);
 
 			std::string	content;
 			Type		type;
+			size_t		line;
+			size_t		column;
 		};
 
-		TokenStream();
+		TokenStream(const std::string &fileName);
 
-		void	push(const Token &token);
-		void	push(const std::string &word);
-		void	push(Token::Type type);
-
-		bool		done() const;
-
-		size_t		getPosition() const;
-
-		const Token	&peek() const;
-
+		void				push(const Token &token);
+		void				push(const std::string &word);
+		void				push(Token::Type type);
+		bool				done() const;
+		size_t				getPosition() const;
+		void				setPosition(size_t pos);
+		const Token			&peek() const;
 		const std::string	&expect(Token::Type type);
 		void				expect(const std::string &value);
+		bool				accept(Token::Type type);
+		bool				accept(const std::string &value);
+		void				skipBlock();
+		void				skipDirective();
 
-		bool	accept(Token::Type type);
-		bool	accept(const std::string &value);
-
-		void	skipBlock();
-		void	skipDirective();
-
-		void	setPosition(size_t pos);
+		size_t				currentTokenizationLine;
+		size_t				currentTokenizationColumn;
+		std::string			filePath;
 
 	private:
 
 		std::vector<Token>	tokens_;
 		size_t				pos_;
+
 	};
 
-	const std::vector<VirtualHost>	&parse(const std::string &filepath);
+	Config(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints);
+	Config(VirtualHosts &hosts, ListenEndpoints &endpoints);
 
 private:
 
+	void	parse(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints);
+
 	void	tokenize(std::ifstream &configIfs);
 
-	// Directive handlers
-	void parseListen(VirtualHost &virtualHost, Route &);
-	void parseServerName(VirtualHost &virtualHost, Route &);
-	void parseServerErrorPage(VirtualHost &virtualHost, Route &defaults);
-	void parseCgi(Route &route);
-	void parseUpload(Route &route);
-	void parseRedirect(Route &route);
-	void parseLocationErrorPage(Route &route);
-	void parseRoot(Route &route);
-	void parseIndex(Route &route);
-	void parseAutoIndex(Route &route);
-	void parseMaxBodySize(Route &route);
-	void parseMethods(Route &route);
-
-	// Directive parsers
-	bool parseServerDirective(VirtualHost &virtualHost, Route &defaults);
-	bool parseLocationDirective(Route &route);
-
 	// Block parsers
-	void parseLocationBlock(VirtualHost &virtualHost, Route &defaults);
-	void parseServerBlock();
+	void	parseServerBlock(VirtualHosts &hosts, ListenEndpoints &endpoints, InterfaceToServerNames &registeredNames);
+	void	parseLocationBlock(VirtualHost &virtualHost, Route &defaults);
 
-	TokenStream					tokenStream_;
-	std::vector<VirtualHost>	virtualHosts_;
+	// Directive dispatchers
+	bool	parseServerDirective(VirtualHost &virtualHost, Route &defaults);
+	bool	parseLocationDirective(Route &route);
+
+	// Directive handlers
+	void	parseListen(std::vector<Interface> &endpoints);
+	void	parseServerName(VirtualHost &virtualHost, Route &);
+	void	parseServerErrorPage(VirtualHost &virtualHost, Route &defaults);
+	void	parseCgi(Route &route);
+	void	parseUpload(Route &route);
+	void	parseRedirect(Route &route);
+	void	parseLocationErrorPage(Route &route);
+	void	parseRoot(Route &route);
+	void	parseIndex(Route &route);
+	void	parseAutoIndex(Route &route);
+	void	parseMaxBodySize(Route &route);
+	void	parseMethods(Route &route);
+
+	TokenStream tokenStream_;
 
 };

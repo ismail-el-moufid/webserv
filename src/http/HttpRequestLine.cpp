@@ -1,5 +1,5 @@
 #include "http/HttpRequest.hpp"		// MAX_REQUEST_LINE_SIZE
-#include "http/HttpStatusCodes.hpp"	// BadRequest, URITooLong, HTTPVersionNotSupported, NotImplemented, NeedMoreData
+#include "http/HttpStatusCodes.hpp"	// BadRequest, URITooLong, HTTPVersionNotSupported, NotImplemented
 #include "utils/StringUtils.hpp"	// isAllDigits
 
 #include <string>					// string
@@ -83,12 +83,12 @@ int validateVersion(const std::string &version, bool endFound)
 	if (!hasFullHttpPrefix(version))
 	{
 		if (isIncompleteHttpPrefix(version))
-			return endFound ? BadRequest : NeedMoreData;
+			return endFound ? BadRequest : NEED_MORE_DATA;
 		return BadRequest;
 	}
 
 	if (!endFound && version.size() < 16)
-		return NeedMoreData;
+		return NEED_MORE_DATA;
 
 	return validateVersionNumbers(version);
 }
@@ -108,8 +108,8 @@ static bool locateSpaces(const std::string &line, size_t &firstSpace, size_t &la
 		}
 		return false;
 	}
-	firstSpace = line.find(' ');
-	lastSpace  = line.rfind(' ');
+	firstSpace	= line.find(' ');
+	lastSpace	= line.rfind(' ');
 	return true;
 }
 
@@ -117,7 +117,7 @@ int validateRequestLine(const std::string &line, size_t &firstSpace, size_t &las
 {
 	// only move on if line is fully received or overly long
 	if (!endFound && line.size() <= MAX_REQUEST_LINE_SIZE)
-			return NeedMoreData;
+			return NEED_MORE_DATA;
 
 	if (hasInvalidChar(line, std::string("\n\0", 2)))
 		return BadRequest;
@@ -126,7 +126,7 @@ int validateRequestLine(const std::string &line, size_t &firstSpace, size_t &las
 
 	size_t spaceCount;
 	if (!locateSpaces(line, firstSpace, lastSpace, spaceCount, endFound))
-		return endFound ? BadRequest : NeedMoreData;
+		return endFound ? BadRequest : NEED_MORE_DATA;
 	if (spaceCount > 2)
 		return BadRequest;
 
@@ -137,7 +137,7 @@ int validateRequestLine(const std::string &line, size_t &firstSpace, size_t &las
 		return result;
 
 	if (spaceCount == 1)
-		return endFound ? BadRequest : NeedMoreData;
+		return endFound ? BadRequest : NEED_MORE_DATA;
 
 	return validateVersion(line.substr(lastSpace + 1), endFound);
 }

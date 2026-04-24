@@ -1,5 +1,5 @@
 #include "http/HttpRequest.hpp"		// MAX_HEADER_SIZE
-#include "http/HttpStatusCodes.hpp"	// BadRequest, NeedMoreData, RequestHeaderFieldsTooLarge
+#include "http/HttpStatusCodes.hpp"	// BadRequest, RequestHeaderFieldsTooLarge
 #include "utils/StringUtils.hpp"	// toLower, trim, hasInvalidChar
 
 #include <cstdlib>					// size_t, strtoul
@@ -67,8 +67,8 @@ static int parseHeaderField(const std::string &line, bool &seenContentLength, st
 	if (colonPos == std::string::npos)
 		return BadRequest;
 
-	std::string name  = toLower(line.substr(0, colonPos));
-	std::string value = trim(line.substr(colonPos + 1));
+	std::string name	= toLower(line.substr(0, colonPos));
+	std::string value	= trim(line.substr(colonPos + 1));
 
 	if (!isValidHeaderFieldName(name) || !isValidHeaderFieldValue(value))
 		return BadRequest;
@@ -81,9 +81,18 @@ static int parseHeaderField(const std::string &line, bool &seenContentLength, st
 	}
 
 	else if (name == "host")
-		for (size_t i = 0; i < value.size(); ++i)
-			if (!std::isalnum(value.at(i)) && value.at(i) != '.' && value.at(i) != '-')
+	{
+		static const std::string allowedSpecials = ".-_~!$&'()*+,;=%";
+		size_t colon = value.find(':');
+		std::string host = value.substr(0, colon);
+
+		for (size_t i = 0; i < host.size(); ++i)
+			if (!std::isalnum((unsigned char)host[i]) && allowedSpecials.find(host[i]) == std::string::npos)
 				return BadRequest;
+
+		if (colon != std::string::npos && !StringUtils::isAllDigits(value, colon + 1))
+			return BadRequest;
+	}
 
 	parsed[name] = value;
 	return VALID;
@@ -124,7 +133,7 @@ int validateHeaders(const std::string &rawHeaderFields, bool complete, const std
 		return result;
 
 	if (!complete)
-		return NeedMoreData;
+		return NEED_MORE_DATA;
 
 	bool	seenContentLength = false;
 	size_t	pos = 0;

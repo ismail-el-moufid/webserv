@@ -1,5 +1,6 @@
 #include "http/HttpRequest.hpp"		// HttpRequest
 #include "http/HttpStatusCodes.hpp"	// BadRequest, ContentTooLarge
+#include "utils/StringUtils.hpp"
 
 #include <string>					// string
 #include <map>						// map
@@ -33,7 +34,7 @@ bool HttpRequest::parseRequestLine()
 		return false;
 
 	method_		= line.substr(0, firstSpace);
-	uri_		= line.substr(firstSpace + 1, lastSpace - firstSpace - 1);
+	uri_		= StringUtils::normalizeSlashes(line.substr(firstSpace + 1, lastSpace - firstSpace - 1));
 	version_	= line.substr(lastSpace + 1);
 
 	bytesParsed_ = lineEnd + 2;
@@ -46,15 +47,15 @@ bool HttpRequest::parseHeaders()
 	if (headerParsed_)
 		return true;
 
-	size_t headersEnd = rawBuffer_.find("\r\n\r\n", bytesParsed_);
-	bool   complete   = (headersEnd != std::string::npos);
+	size_t	headersEnd	= rawBuffer_.find("\r\n\r\n", bytesParsed_);
+	bool	complete	= (headersEnd != std::string::npos);
 
 	size_t advance = 4;
 	if (!complete && rawBuffer_.size() >= bytesParsed_ + 2 && rawBuffer_.compare(bytesParsed_, 2, "\r\n") == 0)
 	{
-		headersEnd = bytesParsed_;
-		complete   = true;
-		advance    = 2;
+		headersEnd	= bytesParsed_;
+		complete	= true;
+		advance		= 2;
 	}
 
 	std::string rawHeaderFields = complete ? rawBuffer_.substr(bytesParsed_, headersEnd - bytesParsed_)
@@ -73,8 +74,8 @@ bool HttpRequest::parseHeaders()
 	if (!chunked_ && contentLength_ == 0)
 		complete_ = true;
 
-	bytesParsed_  = headersEnd + advance;
-	headerParsed_ = true;
+	bytesParsed_	= headersEnd + advance;
+	headerParsed_	= true;
 	return true;
 }
 
@@ -116,27 +117,28 @@ void HttpRequest::cleanBuffer()
 
 void HttpRequest::reset()
 {
-	complete_          = false;
-	requestLineParsed_ = false;
-	headerParsed_      = false;
-	chunked_           = false;
-	errorCode_         = 0;
-	bytesParsed_       = 0;
-	contentLength_     = 0;
+	complete_			= false;
+	requestLineParsed_	= false;
+	headerParsed_		= false;
+	chunked_			= false;
+	errorCode_			= 0;
+	bytesParsed_		= 0;
+	contentLength_		= 0;
 	method_.clear();
 	uri_.clear();
 	version_.clear();
 	headers_.clear();
 	body_.clear();
-	// Note: rawBuffer_ is not cleared to allow for pipelined requests
+	// rawBuffer_ is not cleared to allow for pipelined requests
 }
 
 HttpRequest::HttpRequest(size_t maxBodySize) : complete_(false), headerParsed_(false), requestLineParsed_(false), errorCode_(0), maxBodySize_(maxBodySize), bytesParsed_(0), contentLength_(0), chunked_(false) { }
 
-bool										HttpRequest::complete()		const { return complete_; }
-const std::string							&HttpRequest::method()		const { return method_; }
-const std::string							&HttpRequest::uri()			const { return uri_; }
-const std::string							&HttpRequest::version()		const { return version_; }
-const std::map<std::string, std::string>	&HttpRequest::headers()		const { return headers_; }
-const std::string							&HttpRequest::body()		const { return body_; }
-int											HttpRequest::errorCode()	const { return errorCode_; }
+bool										HttpRequest::complete()			const { return complete_; }
+const std::string							&HttpRequest::method()			const { return method_; }
+const std::string							&HttpRequest::uri()				const { return uri_; }
+const std::string							&HttpRequest::version()			const { return version_; }
+const std::map<std::string, std::string>	&HttpRequest::headers()			const { return headers_; }
+const std::string							&HttpRequest::body()			const { return body_; }
+size_t										HttpRequest::contentLength()	const { return contentLength_; }
+int											HttpRequest::errorCode()		const { return errorCode_; }
