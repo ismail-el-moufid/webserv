@@ -54,6 +54,16 @@ static std::string readFile(const char* filename) {
     return buf.str();
 }
 
+static std::string defaultErrorBody(HTTPStatus::Code status) {
+    std::ostringstream out;
+
+    out << "<!doctype html> <html lang=\"en-us\"><head><title>" << static_cast<int>(status) << " - "
+        << HTTPStatus::reasonPhrase(status) << "</title></head>"
+        << "<body><h1>" << static_cast<int>(status) << " " << HTTPStatus::reasonPhrase(status) << "</h1></body></html>"
+     
+    return out.str();
+}
+
 HttpResponse HttpResponse::HttpResponseError(HTTPStatus::Code status, const std::string &pagePath) {
     HttpResponse res;
 
@@ -61,6 +71,7 @@ HttpResponse HttpResponse::HttpResponseError(HTTPStatus::Code status, const std:
     if (body.empty()) {
         // no file locate at pagePath
         // serve default error page.
+        body = defaultErrorBody(status);
     }
     res.setStatus(status);
     res.setBody(body)
