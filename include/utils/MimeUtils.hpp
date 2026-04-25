@@ -5,4 +5,4 @@
 class MimeUtils {
     public:
         std::string mimeByPath(std::string &path);
-}
+};

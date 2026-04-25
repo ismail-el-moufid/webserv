@@ -1,7 +1,7 @@
 #include "http/HttpResponse.hpp"
 #include <sstream>                  //ostringstream
 
-HttpResponse::HttpResponse(void): status_(HttpStatusCodes::OK){}
+HttpResponse::HttpResponse(void): status_(HttpStatus::OK){}
 
 HttpResponse::HTTPStatus(HTTPStatus::Code status) {
     status_ = status;
@@ -19,7 +19,7 @@ std::string HttpResponse::serialize(void) const {
     std::ostringstream ores;
 
     // 1.1 or 1.0? it depend, let's just stick with 1.1 for now.
-    ores << "HTTP/1.1 " << std::static_cast<int>(status_) << " " << HttpStatusCodes::reasonPhrase(status_) << "\r\n";
+    ores << "HTTP/1.1 " << std::static_cast<int>(status_) << " " << HttpStatus::reasonPhrase(status_) << "\r\n";
 
     // write headers, but need more checks ...
     for (std::map<std::string, std::string>::const_iterator it = headers_.begin(); it != headers_.end(); ++it) {
