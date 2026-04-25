@@ -4,5 +4,5 @@
 
 class MimeUtils {
     public:
-        std::string mimeByPath(std::string &path);
+        std::string mimeByPath(const std::string &path);
 };

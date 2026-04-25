@@ -7,11 +7,11 @@ HttpResponse::HTTPStatus(HTTPStatus::Code status) {
     status_ = status;
 }
 
-HttpResponse::setHeader(std::string &name, std::string &value) {
+HttpResponse::setHeader(const std::string &name, const std::string &value) {
     headers_[name] = value;
 }
 
-HttpResponse::setBody(std::string &body) {
+HttpResponse::setBody(const std::string &body) {
     body_ = body;
 }
 
@@ -88,7 +88,7 @@ HttpResponse HttpResponse::HttpResponseError(HTTPStatus::Code status, const std:
     return res;
 }
 
-HttpResponse HttpResponse::HttpResponseRedirect(HttpStatus::Code status, std::string &location) {
+HttpResponse HttpResponse::HttpResponseRedirect(HttpStatus::Code status, const std::string &location) {
     HttpResponse res;
 
     if (location.empty()) {
