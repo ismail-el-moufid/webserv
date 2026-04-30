@@ -37,7 +37,7 @@ public:
     static void writeStdin(CGIProcess &cgi, const HttpRequest &request);
     static void readStdout(CGIProcess &cgi);
     static void finish(CGIProcess &cgi, HttpResponse &response);
-    static void kill(CGIProcess &cgi, HttpResponse &response);
+    static void kill_Process(CGIProcess &cgi, HttpResponse &response);
 
 private:
     static std::vector<std::string> buildEnv(const HttpRequest &request, const Interface &iface);

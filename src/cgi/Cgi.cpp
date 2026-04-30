@@ -1,4 +1,5 @@
 #include "../include/cgi/Cgi.hpp"
+ #include <signal.h>
 
 std::string    CGIHandler::resolveScript(const HttpRequest &request, std::vector<std::string> &env)
 {
@@ -86,14 +87,56 @@ void CGIHandler::start(CGIProcess &cgi, const HttpRequest &request, const Interf
 {
     char **argumnets;
     char **envm;
+    pid_t pid;
+
     std::string filename;
     std::vector<std::string> env = buildEnv(request, iface);
     filename = resolveScript(request, env);
     std::vector<std::string> arg = buildArg(filename,request);
     argumnets = toCharArray(arg);
     envm = toCharArray(env);
+    cgi.started_ = time(NULL);
     
+    switch (pid = fork())
+    {
+    case 0:
+        dup2(cgi.stdin_.getReadFd(), 0);
+        close(cgi.stdin_.getReadFd());
+        dup2(cgi.stdout_.getWriteFd(), 1);
+        close(cgi.stdout_.getWriteFd());
+        execve(argumnets[0], argumnets, envm);
+        exit(1);
+    default:
+        close(cgi.stdin_.getReadFd());
+        close(cgi.stdout_.getWriteFd());
+        cgi.pid_ = pid;
+    }
 }
+
+void finish(CGIProcess &cgi, HttpResponse &response)
+{
+    int status;
+
+    waitpid(cgi.pid_, &status, 0);
+    if(WIFEXITED(status) || WIFSIGNALED(status))
+        response.setStatus(HttpStatus::InternalServerError);
+    else
+    {    
+        response.setStatus(HttpStatus::OK);
+            //add body function
+        response.setBody(cgi.output_buffer_);
+    }
+}
+
+static void kill_Process(CGIProcess &cgi, HttpResponse &response)
+{
+    int status;
+    kill(cgi.pid_, SIGKILL);
+    waitpid(cgi.pid_, &status, 0);
+    response.setStatus(HttpStatus::InternalServerError);
+    //add body function
+}
+
 
 void CGIHandler::writeStdin(CGIProcess &cgi, const HttpRequest &request)
 {
@@ -117,7 +160,7 @@ void CGIHandler::readStdout(CGIProcess &cgi)
 {
     ssize_t bytes;
     char buffer[4096];
-    bytes =read(cgi.stdout_.getReadFd(), buffer, 4096);
+    bytes = read(cgi.stdout_.getReadFd(), buffer, 4096);
     if(bytes > 0)
         cgi.output_buffer_.append(buffer, bytes);
     else if(bytes == 0)
