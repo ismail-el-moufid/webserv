@@ -5,7 +5,7 @@
 #include "utils/NetworkUtils.hpp"	// Interface
 #include "http/HttpRequest.hpp"		// HttpRequest
 #include "http/HttpResponse.hpp"	// HttpResponse
-#include "cgi/cgi.hpp"				// CGIProcess
+#include "cgi/Cgi.hpp"				// CGIProcess
 
 
 
@@ -49,7 +49,7 @@ public:
 
 	std::string	writeBuffer; // move to response later
 	size_t		writeOffset; // move to response later
-
+	
 	time_t	lastActive;
 	bool	keepAlive;
 

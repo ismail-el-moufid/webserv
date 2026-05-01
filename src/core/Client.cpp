@@ -1,6 +1,6 @@
 #include "core/Client.hpp"
 #include "core/IOReactor.hpp"
-#include "cgi/cgi.hpp"
+#include "cgi/Cgi.hpp"
 #include <sys/socket.h>
 #include <unistd.h>
 

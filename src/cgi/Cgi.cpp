@@ -1,7 +1,11 @@
-#include "../include/cgi/Cgi.hpp"
- #include <signal.h>
+#include "cgi/Cgi.hpp"
+#include "core/Client.hpp"
+#include "core/IOReactor.hpp"
+#include "utils/StringUtils.hpp"
+#include <signal.h>
+#include <cstdlib>
 
-std::string    CGIHandler::resolveScript(const HttpRequest &request, std::vector<std::string> &env)
+std::string    CGIHandler::resolveScript(const HttpRequest &request, std::vector<std::string> &env, const Route &route)
 {
     std::string uri = request.uri();
     size_t qm_pos = uri.find('?');
@@ -9,25 +13,25 @@ std::string    CGIHandler::resolveScript(const HttpRequest &request, std::vector
     std::string filename;
     
     if (qm_pos != std::string::npos) {
-        path_part = uri.substr(0, qm_pos); 
+        path_part = uri.substr(0, qm_pos);
         env.push_back("QUERY_STRING=" + uri.substr(qm_pos + 1));
     } else {
         path_part = uri;
         env.push_back("QUERY_STRING=");
     }
-    std::string script_name = path_part; 
-    size_t dot_pos = path_part.find('.'); 
+    std::string script_name = path_part;
+    size_t dot_pos = path_part.find('.');
     if (dot_pos != std::string::npos) {
         size_t path_info_slash = path_part.find('/', dot_pos);
 
         if (path_info_slash != std::string::npos) {
             script_name = path_part.substr(0, path_info_slash);
-            std::string path_info = path_part.substr(path_info_slash); 
-            // env.push_back("PATH_INFO=" + path_info);
-            // env.push_back("PATH_TRANSLATED=" + iface.root() + path_info);
+            std::string path_info = path_part.substr(path_info_slash);
+            env.push_back("PATH_INFO=" + path_info);
+            env.push_back("PATH_TRANSLATED=" + route.root() + path_info);
         }
     }
-    // filename = route.root() + script_name;
+    filename = route.root() + script_name;
     env.push_back("SCRIPT_NAME=" + script_name);
     env.push_back("SCRIPT_FILENAME=" + filename);
     return filename;
@@ -46,7 +50,7 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
         std::string value = i->second;
         for(size_t idx = 0; idx < key.length(); idx++)
         {
-            key[idx] = toupper(key[idx]);
+            key[idx] = std::toupper(key[idx]);
             if(key[idx] == '-')
                 key[idx] = '_';
         }
@@ -58,10 +62,13 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
     env.push_back("SERVER_SOFTWARE=WebServ/1.0");
     env.push_back("GATEWAY_INTERFACE=CGI/1.1");
     env.push_back("REDIRECT_STATUS=200");
-    // env.push_back("SERVER_NAME=" + vhost.name());
-    // env.push_back("SERVER_PORT=" + vhost.binds()[0].second);
-    // env.push_back("REMOTE_ADDR="); // we need client ip for this;
+    // env.push_back("SERVER_NAME=" + );
+    std::string port,ip;
+    NetworkUtils::extractIPPort(iface, ip, port);
+    env.push_back("SERVER_PORT=" + port);
+    env.push_back("REMOTE_ADDR=" + ip); 
     env.push_back("REQUEST_URI=" + request.uri());
+    return env;
 }
 char   **CGIHandler::toCharArray(const std::vector<std::string> &vec)
  {
@@ -72,65 +79,73 @@ char   **CGIHandler::toCharArray(const std::vector<std::string> &vec)
     arr[i++]= (NULL);
     return(arr);
 }
-std::vector<std::string> CGIHandler::buildArg(const std::string &filename, const HttpRequest &request)
+std::vector<std::string> CGIHandler::buildArg(const std::string &filename, const Route &route)
 {
     size_t dot_pos = filename.rfind('.');
     std::vector<std::string> arg;
     std::string extention = filename.substr(dot_pos);
-    // std::map<std::string, std::string>::const_iterator it = route.CGIs().find(extention);
-    // arg.push_back(it->second);
-    // arg.push_back(filename);
+    std::map<std::string, std::string>::const_iterator it = route.cgis().find(extention);
+    arg.push_back(it->second);
+    arg.push_back(filename);
     return(arg);
 }
 
-void CGIHandler::start(CGIProcess &cgi, const HttpRequest &request, const Interface &iface)
+void CGIHandler::start(Client &client)
 {
     char **argumnets;
     char **envm;
     pid_t pid;
 
+    CGIProcess &cgi = *(client.cgi);
     std::string filename;
-    std::vector<std::string> env = buildEnv(request, iface);
-    filename = resolveScript(request, env);
-    std::vector<std::string> arg = buildArg(filename,request);
-    argumnets = toCharArray(arg);
-    envm = toCharArray(env);
+    std::vector<std::string> environ = buildEnv(client.request, client.iface);
+    std::vector<const char *> env = StringUtils::toNullTerminatedCStrings(environ);
+    filename = resolveScript(client.request, environ, *client.request.route);
+    std::vector<const char *> arg = StringUtils::toNullTerminatedCStrings(buildArg(filename, *client.request.route));
+    argumnets = const_cast<char**>(&arg[0]);
+    envm = const_cast<char**>(&env[0]);
     cgi.started_ = time(NULL);
-    
     switch (pid = fork())
     {
+    case -1:
+        delete  client.cgi;
+        client.cgi = NULL;
+        client.response.setStatus(HttpStatus::InternalServerError);
+        return ;
     case 0:
-        dup2(cgi.stdin_.getReadFd(), 0);
-        close(cgi.stdin_.getReadFd());
-        dup2(cgi.stdout_.getWriteFd(), 1);
-        close(cgi.stdout_.getWriteFd());
+        dup2(cgi.stdin_.readFd(), 0);
+        dup2(cgi.stdout_.writeFd(), 1);
         execve(argumnets[0], argumnets, envm);
         exit(1);
+        break ;
     default:
-        close(cgi.stdin_.getReadFd());
-        close(cgi.stdout_.getWriteFd());
+        cgi.stdin_.closeRead();
+        cgi.stdout_.closeWrite();
         cgi.pid_ = pid;
     }
 }
 
-void finish(CGIProcess &cgi, HttpResponse &response)
+void CGIHandler::finish(Client &client)
 {
     int status;
-
+    CGIProcess &cgi = *client.cgi;
+    HttpResponse &response = client.response;
     waitpid(cgi.pid_, &status, 0);
-    if(WIFEXITED(status) || WIFSIGNALED(status))
-        response.setStatus(HttpStatus::InternalServerError);
-    else
-    {    
-        response.setStatus(HttpStatus::OK);
-            //add body function
+    if(WIFEXITED(status) || WIFSIGNALED(status) == 0)
+    {   response.setStatus(HttpStatus::OK);
         response.setBody(cgi.output_buffer_);
     }
+    else  
+        response.setStatus(HttpStatus::InternalServerError);
+            //add body function
 }
 
-static void kill_Process(CGIProcess &cgi, HttpResponse &response)
+void    CGIHandler::killProcess(Client &client)
 {
     int status;
+    HttpResponse &response = client.response;
+    CGIProcess &cgi = *client.cgi;
+
     kill(cgi.pid_, SIGKILL);
     waitpid(cgi.pid_, &status, 0);
     response.setStatus(HttpStatus::InternalServerError);
@@ -138,212 +153,69 @@ static void kill_Process(CGIProcess &cgi, HttpResponse &response)
 }
 
 
-void CGIHandler::writeStdin(CGIProcess &cgi, const HttpRequest &request)
+bool CGIHandler::writeStdin(Client &client)
 {
     ssize_t written;
+    HttpResponse &response = client.response;
+    CGIProcess &cgi = *client.cgi;
+    const HttpRequest &request = client.request;
 
     if(cgi.bytes_sent_ >= request.contentLength())
     {
         cgi.stdin_.closeWrite();
-        //change stat of client
-        return;
+        return true;
     }
-    ssize_t remaining = request.contentLength() - cgi.bytes_sent_;
-    written = write(cgi.stdin_.getWriteFd(), request.body().c_str() + cgi.bytes_sent_ , remaining);
+    size_t remaining = request.contentLength() - cgi.bytes_sent_;
+    written = write(cgi.stdin_.writeFd(), request.body().c_str() + cgi.bytes_sent_ , remaining);
     if(written > 0)
         cgi.bytes_sent_ += written;
     else if(written == -1)
-        return ;//hundle eror
+        response.setStatus(HttpStatus::InternalServerError);
+        //body funct;
+    return false;
 }
 
-void CGIHandler::readStdout(CGIProcess &cgi)
+bool CGIHandler::readStdout(Client &client)
 {
     ssize_t bytes;
+    CGIProcess &cgi = *client.cgi;
     char buffer[4096];
-    bytes = read(cgi.stdout_.getReadFd(), buffer, 4096);
+    HttpResponse &response = client.response;
+
+    bytes = read(cgi.stdout_.readFd(), buffer, 4096);
     if(bytes > 0)
         cgi.output_buffer_.append(buffer, bytes);
     else if(bytes == 0)
-    {
+    {    
         cgi.stdout_.closeRead();
-       //change state
+        return true;    
     }
     else
-        return; //hundle errors
+       response.setStatus(HttpStatus::InternalServerError);
+    //body funct;
+    return false;                                                                                               
 }
-// void CGI::execute_cgi(const HttpRequest &request)
-// {
-//     Pipe stdin_pipe;
-//     Pipe stdout_pipe;
-//     int status;
-//     ssize_t n;
-//     char **arg = getarg();
-//     char **env = getenv();
-//     pid_t pid = fork();
-//     switch (pid)
-//     {
-//     case -1:
-//         this->status = 500;
-//         return;
-//     case 0:
-//         dup2(stdin_pipe.getReadFd(), 0);
-//         dup2(stdout_pipe.getWriteFd(), 1);
-//         execve(arg[0],arg, env);
-//         perror("execve");
-//         exit(1);
-//     default:
-//         stdin_pipe.closeRead();
-//         stdout_pipe.closeWrite();
-//         if(request.method() == "POST")
-//             write(stdin_pipe.getWriteFd(), request.body().c_str(), request.contentLength());
-//         stdin_pipe.closeWrite();
-//         char buffer[1000];
-//         while ((n =read(stdout_pipe.getReadFd(), buffer, 1000)) > 0)
-//                 _respond.append(buffer,n);
-//         stdout_pipe.closeRead();
-//         waitpid(pid, &status, 0);
-//         if(!WIFEXITED(status) || WIFSIGNALED(status) != 0)
-//             this->status = 500;
-//         else
-//             this->status = 200;
-//     }
-// }
-// void cgi(const HttpRequest &request, const VirtualHost &vhost, const Route &route)
-// {
-//     CGI cgi;
-//     std::string filename;
-//     filename = cgi.setenv(request, vhost, route);
-//     cgi.setarg(filename, route);
-//     cgi.execute_cgi(request);
-// }
+CGIProcess::CGIProcess(IOReactor &reactor, Client &client) : IPollable(reactor), pid_(-1), started_(0), bytes_sent_(0), client_(&client) {}
 
-// std::string split_uri(std::vector<std::string> &env, const HttpRequest &request, const Route &route)
-// {
-//     std::string uri = request.uri();
-//     size_t qm_pos = uri.find('?');
-//     std::string path_part;
-//     std::string filename;
-    
-//     if (qm_pos != std::string::npos) {
-//         path_part = uri.substr(0, qm_pos); 
-//         env.push_back("QUERY_STRING=" + uri.substr(qm_pos + 1));
-//     } else {
-//         path_part = uri;
-//         env.push_back("QUERY_STRING=");
-//     }
-//     std::string script_name = path_part; 
-//     size_t dot_pos = path_part.find('.'); 
-//     if (dot_pos != std::string::npos) {
-//         size_t path_info_slash = path_part.find('/', dot_pos);
+CGIProcess::~CGIProcess() { reactor_.remove(*this); }
 
-//         if (path_info_slash != std::string::npos) {
-//             script_name = path_part.substr(0, path_info_slash);
-//             std::string path_info = path_part.substr(path_info_slash);
-            
-//             env.push_back("PATH_INFO=" + path_info);
-//             env.push_back("PATH_TRANSLATED=" + route.root() + path_info);
-//         }
-//     }
-//     filename = route.root() + script_name;
-//     env.push_back("SCRIPT_NAME=" + script_name);
-//     env.push_back("SCRIPT_FILENAME=" + filename);
-//     return filename;
-// }
-// std::string CGI::setenv(const HttpRequest &request, const VirtualHost &vhost, const Route &route)
-// {
-//     std::string filename;
+void CGIProcess::onWrite()
+{
+    if (CGIHandler::writeStdin(*client_))
+        reactor_.mod(*this, POLLIN);
+}
 
-//     _env.push_back("REQUEST_METHOD=" + request.method());
-//     _env.push_back("SERVER_PROTOCOL=" + request.version());
-//     std::string uri = request.uri();
-//     filename = split_uri(_env, request, route);
-//     const std::map<std::string, std::string> headers = request.headers();
-//     std::map<std::string,std::string>::const_iterator i;
-//     for(i = headers.begin(); i != headers.end(); i++)
-//     {
-//         std::string key = i->first;
-//         std::string value = i->second;
-//         for(size_t idx = 0; idx < key.length(); idx++)
-//         {
-//             key[idx] = toupper(key[idx]);
-//             if(key[idx] == '-')
-//                 key[idx] = '_';
-//         }
-//         if(key == "CONTENT_LENGTH" || key  == "CONTENT_TYPE")
-//             _env.push_back(key + "=" + value);
-//         else
-//             _env.push_back("HTTP_" + key + "=" + value);
-//     }
-//     _env.push_back("SERVER_SOFTWARE=WebServ/1.0");
-//     _env.push_back("GATEWAY_INTERFACE=CGI/1.1");
-//     _env.push_back("REDIRECT_STATUS=200");
-//     _env.push_back("SERVER_NAME=" + vhost.name());
-//     _env.push_back("SERVER_PORT=" + vhost.binds()[0].second);
-//     _env.push_back("REMOTE_ADDR="); // we need client ip for this;
-//     _env.push_back("REQUEST_URI=" + request.uri());
-//     return filename;
-// }
+void CGIProcess::onRead()
+{
+    if (CGIHandler::readStdout(*client_))
+    {
+        CGIHandler::finish(*client_);
+        reactor_.remove(*this);
+        client_->cgi = NULL;
+        delete this;
+    }
+}
 
-// void CGI::setarg(std::string filename, const Route &route)
-// {
-//     size_t dot_pos = filename.rfind('.');
-
-//     std::string extention = filename.substr(dot_pos);
-//     std::map<std::string, std::string>::const_iterator it = route.CGIs().find(extention);
-//     _arg.push_back(it->second);
-//     _arg.push_back(filename);
-// }
-
-// char **CGI::getarg()
-// {
-//     for(std::vector<std::string>::iterator it = _arg.begin(); it != _arg.end(); ++it)
-//         _argv.push_back(it->c_str());
-//     _argv.push_back(NULL);
-//     return(const_cast<char**>(_argv.data()));
-// }
-
-// char **CGI::getenv()
-// {
-//     for(std::vector<std::string>::const_iterator it = _env.begin(); it != _env.end(); ++it)
-//         _envm.push_back(it->c_str());
-//     _envm.push_back(NULL);
-//     return(const_cast<char**>(_envm.data()));
-// }
-
-// std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const Interface &iface)
-// {
-//    std::vector<std::string> env;
-
-//     td::string filename;
-
-    
-//     env.push_back("REQUEST_METHOD=" + request.method());
-//     env.push_back("SERVER_PROTOCOL=" + request.version());
-//     std::string uri = request.uri();
-//     filename = split_uri(env, request, route);
-//     const std::map<std::string, std::string> headers = request.headers();
-//     std::map<std::string,std::string>::const_iterator i;
-//     for(i = headers.begin(); i != headers.end(); i++)
-//     {
-//         std::string key = i->first;
-//         std::string value = i->second;
-//         for(size_t idx = 0; idx < key.length(); idx++)
-//         {
-//             key[idx] = toupper(key[idx]);
-//             if(key[idx] == '-')
-//                 key[idx] = '_';
-//         }
-//         if(key == "CONTENT_LENGTH" || key  == "CONTENT_TYPE")
-//             env.push_back(key + "=" + value);
-//         else
-//             env.push_back("HTTP_" + key + "=" + value);
-//     }
-//     env.push_back("SERVER_SOFTWARE=WebServ/1.0");
-//     env.push_back("GATEWAY_INTERFACE=CGI/1.1");
-//     env.push_back("REDIRECT_STATUS=200");
-//     env.push_back("SERVER_NAME=" + vhost.name());
-//     env.push_back("SERVER_PORT=" + vhost.binds()[0].second);
-//     env.push_back("REMOTE_ADDR="); // we need client ip for this;
-//     env.push_back("REQUEST_URI=" + request.uri());
-//     return filename;
-// }
+int CGIProcess::readFd()    const { return stdout_.readFd(); }
+int CGIProcess::writeFd()    const { return stdin_.writeFd(); }
+bool CGIProcess::running()    const { return pid_ != -1; }
