@@ -117,6 +117,8 @@ void HttpRequest::cleanBuffer()
 
 void HttpRequest::reset()
 {
+	vhost				= NULL;
+	route				= NULL;
 	complete_			= false;
 	requestLineParsed_	= false;
 	headerParsed_		= false;
@@ -124,8 +126,6 @@ void HttpRequest::reset()
 	errorCode_			= 0;
 	bytesParsed_		= 0;
 	contentLength_		= 0;
-	vhost_				= NULL;
-	route_				= NULL;
 	method_.clear();
 	uri_.clear();
 	version_.clear();
@@ -134,7 +134,7 @@ void HttpRequest::reset()
 	// rawBuffer_ is not cleared to allow for pipelined requests
 }
 
-HttpRequest::HttpRequest(size_t maxBodySize) : complete_(false), headerParsed_(false), requestLineParsed_(false), errorCode_(0), maxBodySize_(maxBodySize), bytesParsed_(0), contentLength_(0), chunked_(false), vhost_(NULL), route_(NULL) { }
+HttpRequest::HttpRequest(size_t maxBodySize) : vhost(NULL), route(NULL), complete_(false), headerParsed_(false), requestLineParsed_(false), errorCode_(0), maxBodySize_(maxBodySize), bytesParsed_(0), contentLength_(0), chunked_(false) { }
 
 bool										HttpRequest::complete()			const { return complete_; }
 const std::string							&HttpRequest::method()			const { return method_; }

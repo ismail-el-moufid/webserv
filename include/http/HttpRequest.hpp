@@ -45,6 +45,10 @@ public:
 	size_t										contentLength() const;
 	int											errorCode() const;
 
+	// config context
+	const VirtualHost	*vhost;
+	const Route			*route;
+
 private:
 
 	// can't be default constructed, must provide max body size
@@ -76,7 +80,4 @@ private:
 	std::map<std::string, std::string>	headers_;
 	std::string							body_;
 
-	// config context
-	const VirtualHost	*vhost_;
-	const Route			*route_;
 };
