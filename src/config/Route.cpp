@@ -2,6 +2,7 @@
 #include "http/HttpStatusCodes.hpp"	// Code, isRedirectCode, toCode
 #include "utils/StringUtils.hpp"	// isAllDigits
 #include <stdexcept>				// runtime_error
+#include <cstdlib>					// NULL, size_t, strtoul
 
 Route::Route() : maxBodySize_(0), redirect_(false), autoindex_(false) {}
 
@@ -17,7 +18,7 @@ void Route::setMaxBodySize(const std::string &maxBodySize)
 {
 	if (!StringUtils::isAllDigits(maxBodySize))
 		throw std::runtime_error("clientMaxBodySize must be a number");
-	maxBodySize_ = std::strtoul(maxBodySize.c_str(), NULL, 10);
+	maxBodySize_ = strtoul(maxBodySize.c_str(), NULL, 10);
 }
 void	Route::setPath(const std::string &path)	{ path_ = StringUtils::normalizeSlashes(path); }
 void	Route::setRoot(const std::string &root)	{ (root_ = StringUtils::normalizeSlashes(root)).erase(root_.find_last_not_of('/') + 1); }

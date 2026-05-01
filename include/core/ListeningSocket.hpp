@@ -1,11 +1,9 @@
 #pragma once
 
+#include "core/IPollable.hpp"		// IPollable
 #include "core/Socket.hpp"			// Socket
-
-
-#include <string>					// string
-
-
+#include "core/IOReactor.hpp"		// IOReactor
+#include "utils/NetworkUtils.hpp"	// Interface
 
 
 
@@ -19,20 +17,31 @@
 
 
 
-class ListeningSocket : public Socket
+
+
+
+
+
+
+
+
+class ListeningSocket : public Socket, public IPollable
 {
 
 public:
 
-	ListeningSocket(const std::string &bind_address, const std::string &bind_port);
+	ListeningSocket(const Interface &iface, IOReactor &reactor);
 
-	int acceptConnection();
+	int	readFd() const;
+	int	writeFd() const;
+
+	void onRead();
 
 private:
 
-	// Non-copyable
-	ListeningSocket(const ListeningSocket &other);
-	// Non-assignable
-	ListeningSocket &operator=(const ListeningSocket &other);
+	ListeningSocket(const ListeningSocket &);
+	ListeningSocket &operator=(const ListeningSocket &);
+
+	Interface iface_;
 
 };

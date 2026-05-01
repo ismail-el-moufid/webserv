@@ -3,22 +3,27 @@
 #include "config/VirtualHost.hpp"	// VirtualHost
 #include "utils/NetworkUtils.hpp"	// Interface, InterfaceCompare
 
-#include <cstddef>
+
+
+
+
+#include <cstddef>					// size_t
 #include <string>					// string
-#include <deque>					// deque
 #include <vector>					// vector
 #include <map>						// map
-#include <unordered_set>			// unordered_set
+#include <deque>					// deque
+#include <set>						// set
 #include <fstream>					// ifstream
 
 #define DefaultConfig InstallDir "/conf/webserv.conf"
+#define SUPPORTED_CGI_EXTENSIONS { ".py", ".php" }
 
 
 
 
 typedef std::deque<VirtualHost>																	VirtualHosts;
 typedef std::map<Interface, std::vector<VirtualHost *>, NetworkUtils::InterfaceCompare>			ListenEndpoints;
-typedef std::map<Interface, std::unordered_set<std::string>, NetworkUtils::InterfaceCompare>	InterfaceToServerNames;
+typedef std::map<Interface, std::set<std::string>, NetworkUtils::InterfaceCompare>				InterfaceToServerNames;
 
 class Config
 {

@@ -41,7 +41,15 @@ void Config::parseCgi(Route &route)
 	const std::string &path			= tokenStream_.expect(TokenStream::Token::DirectiveWord);
 	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
 
-	route.addCgi(extension, path);
+	const std::string supported[] = SUPPORTED_CGI_EXTENSIONS;
+	const size_t count = sizeof(supported) / sizeof(supported[0]);
+	for (size_t i = 0; i < count; ++i)
+		if (supported[i] == extension)
+		{
+			route.addCgi(extension, path);
+			return ;
+		}
+	throw std::runtime_error("Unsupported CGI extension: " + extension);
 }
 
 void Config::parseRedirect(Route &route)

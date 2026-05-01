@@ -2,7 +2,7 @@
 #include "utils/StringUtils.hpp"
 #include <stdexcept>
 
-Config::TokenStream::TokenStream(const std::string &fileName) : pos_(0), currentTokenizationLine(0), currentTokenizationColumn(0), filePath(fileName) { }
+Config::TokenStream::TokenStream(const std::string &fileName) : currentTokenizationLine(0), currentTokenizationColumn(0), filePath(fileName), pos_(0) { }
 
 void Config::TokenStream::push(const Token &token)		{ tokens_.push_back(token); }
 void Config::TokenStream::push(const std::string &word)	{ Token t(word); t.line = currentTokenizationLine; t.column = currentTokenizationColumn; tokens_.push_back(t); }
@@ -84,7 +84,7 @@ void Config::TokenStream::skipBlock()
 		else if (tokens_.at(pos_).type == Token::BlockClose && depth-- == 1)
 		{
 			++pos_;
-			return;
+			return ;
 		}
 		++pos_;
 	}

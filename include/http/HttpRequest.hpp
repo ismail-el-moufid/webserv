@@ -1,5 +1,9 @@
 #pragma once
 
+#include "config/VirtualHost.hpp"
+
+
+
 
 
 
@@ -10,11 +14,13 @@
 
 
 
+
 #define MAX_REQUEST_LINE_SIZE	8192	// 8KB
 #define MAX_HEADER_SIZE			16384	// 16KB
 #define MAX_URI_SIZE			(MAX_REQUEST_LINE_SIZE - 15)
 #define VALID					0
 #define NEED_MORE_DATA			0
+
 
 
 
@@ -62,7 +68,7 @@ private:
 	size_t	contentLength_;
 	bool	chunked_;
 
-	// data
+	// parsed data
 	std::string							rawBuffer_;
 	std::string							method_;
 	std::string							uri_;
@@ -70,4 +76,7 @@ private:
 	std::map<std::string, std::string>	headers_;
 	std::string							body_;
 
+	// config context
+	const VirtualHost	*vhost_;
+	const Route			*route_;
 };

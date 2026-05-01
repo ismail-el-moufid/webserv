@@ -1,12 +1,13 @@
-#include "config/Config.hpp"
-#include "config/VirtualHost.hpp"	// NoDefaults, VirtualHost
+#include "config/Config.hpp"		// Config, DefaultConfig, InterfaceToServerNames, ListenEndpoints, VirtualHosts and 6 more
+#include "config/VirtualHost.hpp"	// VirtualHost
 #include "utils/NetworkUtils.hpp"	// Interface, resolve
 #include "utils/StringUtils.hpp"	// toString
 
-#include <cstddef>
+#include <cstddef>					// size_t
 #include <iostream>					// cerr, endl, streamsize
 #include <limits>					// numeric_limits
 #include <stdexcept>				// runtime_error
+#include <algorithm>				// find
 
 typedef void (Config::*LocationDirectiveHandler)(Route &);
 typedef void (Config::*ServerDirectiveHandler)(VirtualHost &, Route &);

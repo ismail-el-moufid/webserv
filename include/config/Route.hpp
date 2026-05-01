@@ -1,6 +1,10 @@
 #pragma once
 
-#include "http/HttpStatusCodes.hpp"	// HttpStatus::Code
+#include "http/HttpStatusCodes.hpp"	// Code
+
+
+
+
 
 
 #include <cstddef>					// size_t
@@ -10,8 +14,10 @@
 
 
 
+
 #define InstallDir "/usr/local/webserv"
 #define HtmlDir InstallDir "/html"
+
 
 
 

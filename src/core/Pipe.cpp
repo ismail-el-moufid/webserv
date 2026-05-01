@@ -40,12 +40,12 @@ Pipe::~Pipe()
 	if (writeFd_	!= -1) close(writeFd_);
 }
 
-int Pipe::getReadFd() const
+int Pipe::readFd() const
 {
 	return readFd_;
 }
 
-int Pipe::getWriteFd() const
+int Pipe::writeFd() const
 {
 	return writeFd_;
 }

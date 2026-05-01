@@ -19,6 +19,12 @@
 
 
 
+
+
+
+
+
+
 class Pipe
 {
 
@@ -27,8 +33,8 @@ public:
 	Pipe();
 	~Pipe();
 
-	int getReadFd() const;
-	int getWriteFd() const;
+	int readFd() const;
+	int writeFd() const;
 
 	void closeWrite();
 	void closeRead();
