@@ -18,6 +18,7 @@ class HttpResponse {
 
        static HttpResponse HttpResponseError(HttpStatus::Code status, const std::string &pagePath);
        static HttpResponse HttpResponseRedirect(HttpStatus::Code status, const std::string& location);
+       static HttpResponse HttpDirListing(const std::string &uri, const std::string &path);
 
 
     private:

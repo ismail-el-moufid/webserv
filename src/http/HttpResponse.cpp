@@ -1,5 +1,9 @@
 #include "http/HttpResponse.hpp"
-#include <sstream>                  //ostringstream
+#include <dirent.h>                 // opendir, readdir, closedir
+#include <sstream>                  // ostringstream
+#include <sys/stat.h>               // stat
+#include <ctime.h>
+#include <iomanip> 
 
 HttpResponse::HttpResponse(void): status_(HttpStatus::OK){}
 
@@ -103,4 +107,52 @@ HttpResponse HttpResponse::HttpResponseRedirect(HttpStatus::Code status, const s
          << "<body> redirecting to <a href=\"" << location << "\"></a></body></html>";
     res.setBody(body.str());
     return res;
+}
+
+HttpResponse HttpResponse::HttpDirListing(const std::string &uri, const std::string &path) {
+    DIR *dir = opendir(path.c_str());
+    if (!dir) {
+        // or 404?
+        return HttpResponseError(HttpStatus::Code::Forbidden, "/html/403.html");
+    }
+
+    std::ostringstream body;
+    body << "<html><head><title>Index of " << uri << "</title></head>"
+         << "<body><h1>Index of " << uri << "</h1><hr><pre><a href=\"../\">../</a>\n";
+
+    struct dirent *content;
+    while ((content = readdir(dir)) != NULL) {
+        struct stat st;
+        std::string name(content->d_name);
+        if (name == "." || name == "..") {
+            continue;
+        }
+
+        if (stat((path + "/" + name).c_str(), &st) != 0) {
+            continue;
+        }
+        bool isDir = S_ISDIR(st.st_mode);
+        std::string display = name + (isDir ? "/" : "");
+
+        char displayTime[32];
+        std::strftime(displayTime, sizeof(displayTime), "%d-%b-%Y %H:%M", std::localtime(&st.st_mtime));
+        body << "<a href=\"" << display << "\">"
+             << std::left << std::setw(50) << display << "</a>"
+             << std::setw(20) << displayTime;
+
+        if (isDir){
+            body << std::setw(20) << "-";
+        } else {
+            body << std::setw(20) << st.st_size;
+        }
+        body << "\r\n";
+    }
+    closedir(dir);
+    body << "</pre><hr></body>\r\n</html>\r\n";
+
+	HttpResponse res;
+	res.setStatus(HttpStatus::OK);
+	res.setContentType("text/html");
+	res.setBody(body.str());
+	return res;
 }
