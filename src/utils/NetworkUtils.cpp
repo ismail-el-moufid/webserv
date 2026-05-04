@@ -39,8 +39,8 @@ bool resolve(const std::string &address, const std::string &port, Interface &res
 
 bool InterfaceCompare::operator()(const Interface &a, const Interface &b) const
 {
-	if (a.family  != b.family)  return a.family  < b.family;
-	if (a.addrlen != b.addrlen) return a.addrlen < b.addrlen;
+	if (a.family	!= b.family)	return a.family		< b.family;
+	if (a.addrlen	!= b.addrlen)	return a.addrlen	< b.addrlen;
 	return std::memcmp(&a.addr, &b.addr, a.addrlen) < 0;
 }
 
@@ -67,10 +67,10 @@ void extractIPPort(const Interface &iface, std::string &ip, std::string &port)
 		reinterpret_cast<const struct sockaddr_in *>(&iface.addr);
 
 	unsigned long addr = ntohl(sin->sin_addr.s_addr);
-	ip =  StringUtils::toString((addr >> 24)	& 0xFF) + "."
-		+ StringUtils::toString((addr >> 16)	& 0xFF) + "."
-		+ StringUtils::toString((addr >>  8)	& 0xFF) + "."
-		+ StringUtils::toString( addr		& 0xFF);
+	ip =	StringUtils::toString((addr >>	24)	& 0xFF) + "."
+		+	StringUtils::toString((addr >>	16)	& 0xFF) + "."
+		+	StringUtils::toString((addr >>	8)	& 0xFF) + "."
+		+	StringUtils::toString( addr		& 0xFF);
 	port = StringUtils::toString(ntohs(sin->sin_port));
 }
 

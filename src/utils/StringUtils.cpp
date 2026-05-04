@@ -1,5 +1,6 @@
 #include "utils/StringUtils.hpp"	// toLower, trim, isAllDigits, hasInvalidChar
 #include <cctype>					// isdigit, isspace, tolower, toupper
+#include <ctime>					// NULL, localtime, size_t, strftime, time and 1 more
 
 namespace StringUtils
 {
@@ -61,5 +62,15 @@ std::vector<const char *> toNullTerminatedCStrings(const std::vector<std::string
 }
 
 bool hasInvalidChar(const std::string &s, const std::string &invalid, size_t from) { return s.find_first_of(invalid, from) != std::string::npos; }
+
+std::string currentTime()
+{
+	std::time_t	now = std::time(NULL);
+	char		buf[32];
+
+	std::strftime(buf, sizeof(buf), "[%d/%b/%Y:%H:%M:%S %z]", std::localtime(&now));
+
+	return buf;
+}
 
 }

@@ -22,9 +22,6 @@
 
 
 
-
-
-
 namespace StringUtils
 {
 
@@ -44,4 +41,5 @@ namespace StringUtils
 		return oss.str();
 	}
 
+	std::string currentTime();
 }

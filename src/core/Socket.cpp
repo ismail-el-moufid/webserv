@@ -1,4 +1,5 @@
 #include "core/Socket.hpp"			// Socket
+#include "utils/StringUtils.hpp"	// currentTime
 
 #include <sys/socket.h>				// socket()
 #include <netinet/in.h>				// AF_INET, SOCK_STREAM
@@ -9,7 +10,7 @@
 void Socket::configureSocket()
 {
 	if (fd_ == -1)
-		throw std::runtime_error("Invalid socket file descriptor");
+		throw std::runtime_error(StringUtils::currentTime() + " [error] Invalid socket file descriptor");
 
 	// Set the close-on-exec flag to prevent file descriptor leaks in child processes
 	// Also set the socket to non-blocking mode
@@ -17,7 +18,7 @@ void Socket::configureSocket()
 	{
 		close(fd_);
 		fd_ = -1;
-		throw std::runtime_error("Failed to set FD_CLOEXEC and O_NONBLOCK flags on socket file descriptor");
+		throw std::runtime_error(StringUtils::currentTime() + " [error] Failed to set FD_CLOEXEC and O_NONBLOCK flags on socket file descriptor");
 	}
 }
 

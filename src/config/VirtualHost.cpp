@@ -1,6 +1,7 @@
 #include "config/VirtualHost.hpp"	// VirtualHost
 #include "http/HttpStatusCodes.hpp"	// HttpStatus Codes
 #include "utils/StringUtils.hpp"	// toLower
+#include "Defaults.hpp"				// HtmlDir
 
 #include <string>					// string
 #include <utility>					// make_pair, pair
@@ -34,14 +35,14 @@ void VirtualHost::addName(const std::string &name)
 {
 	for (size_t i = 0; i < name.size(); ++i)
 		if (!std::isalnum(name.at(i)) && name.at(i) != '.' && name.at(i) != '-')
-			throw std::runtime_error("Invalid server name: " + name);
+			throw std::runtime_error(StringUtils::currentTime() + " [error] Invalid server name: " + name);
 	names_.push_back(StringUtils::toLower(name));
 }
 
 void VirtualHost::addErrorPage(const std::string &code, const std::string &page)
 {
 	if (!HttpStatus::isErrorCode(code))
-		throw std::runtime_error("Invalid error code");
+		throw std::runtime_error(StringUtils::currentTime() + " [error] Invalid error code");
 	errorPages_[HttpStatus::toCode(code)] = page;
 }
 

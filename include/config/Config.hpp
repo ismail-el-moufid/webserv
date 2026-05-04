@@ -8,6 +8,7 @@
 
 
 #include <cstddef>					// size_t
+#include <ctime>					// time_t
 #include <string>					// string
 #include <vector>					// vector
 #include <map>						// map
@@ -15,15 +16,11 @@
 #include <set>						// set
 #include <fstream>					// ifstream
 
-#define DefaultConfig InstallDir "/conf/webserv.conf"
-#define SUPPORTED_CGI_EXTENSIONS { ".py", ".php" }
-
-
-
-
 typedef std::deque<VirtualHost>																	VirtualHosts;
 typedef std::map<Interface, std::vector<VirtualHost *>, NetworkUtils::InterfaceCompare>			ListenEndpoints;
 typedef std::map<Interface, std::set<std::string>, NetworkUtils::InterfaceCompare>				InterfaceToServerNames;
+
+
 
 class Config
 {
@@ -79,12 +76,12 @@ public:
 
 	};
 
-	Config(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints);
-	Config(VirtualHosts &hosts, ListenEndpoints &endpoints);
+	Config(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints, time_t &timeout);
+	Config(VirtualHosts &hosts, ListenEndpoints &endpoints, time_t &timeout);
 
 private:
 
-	void	parse(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints);
+	void	parse(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints, time_t &timeout);
 
 	void	tokenize(std::ifstream &configIfs);
 
@@ -108,8 +105,12 @@ private:
 	void	parseIndex(Route &route);
 	void	parseAutoIndex(Route &route);
 	void	parseMaxBodySize(Route &route);
-	void	parseMethods(Route &route);
+	void	parseAllowedMethods(Route &route);
+
+	std::string relativeToConfDir(const std::string &path) const;
 
 	TokenStream tokenStream_;
+	std::string confDir_;
+
 
 };

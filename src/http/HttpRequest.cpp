@@ -10,11 +10,6 @@ using namespace HttpStatus;
 
 int validateRequestLine(const std::string &line, size_t &firstSpace, size_t &lastSpace, bool complete);
 
-int validateHeaders(const std::string &rawHeaderFields, bool complete, const std::string &version, size_t &contentLength, bool &chunked, std::map<std::string, std::string> &parsed);
-
-bool parseFixedBody(std::string &rawBuffer, size_t &bytesParsed, std::string &body, bool &complete, size_t contentLength);
-bool parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, std::string &body, bool &complete, int &errorCode, size_t maxBodySize);
-
 bool HttpRequest::parseRequestLine()
 {
 	if (requestLineParsed_)
@@ -33,14 +28,17 @@ bool HttpRequest::parseRequestLine()
 	if ((errorCode_ = validateRequestLine(line, firstSpace, lastSpace, true)))
 		return false;
 
-	method_		= line.substr(0, firstSpace);
-	uri_		= StringUtils::normalizeSlashes(line.substr(firstSpace + 1, lastSpace - firstSpace - 1));
-	version_	= line.substr(lastSpace + 1);
+	method_				= line.substr(0, firstSpace);
+	uri_				= StringUtils::normalizeSlashes(line.substr(firstSpace + 1, lastSpace - firstSpace - 1));
+	version_			= line.substr(lastSpace + 1);
+	connectionClose_	= (version_ != "HTTP/1.1");
 
 	bytesParsed_ = lineEnd + 2;
 	requestLineParsed_ = true;
 	return true;
 }
+
+int validateHeaders(const std::string &rawHeaderFields, bool complete, const std::string &version, size_t &contentLength, bool &chunked, bool &connectionClose, std::map<std::string, std::string> &parsed);
 
 bool HttpRequest::parseHeaders()
 {
@@ -61,11 +59,11 @@ bool HttpRequest::parseHeaders()
 	std::string rawHeaderFields = complete ? rawBuffer_.substr(bytesParsed_, headersEnd - bytesParsed_)
 								: rawBuffer_.substr(bytesParsed_);
 
-	if ((errorCode_ = validateHeaders(rawHeaderFields, complete, version_, contentLength_, chunked_, headers_))
+	if ((errorCode_ = validateHeaders(rawHeaderFields, complete, version_, contentLength_, chunked_, connectionClose_, headers_))
 		|| !complete)
 		return false;
 
-	if (!chunked_ && contentLength_ > maxBodySize_)
+	if (!chunked_ && maxBodySizeSet_ && contentLength_ > maxBodySize_)
 		return errorCode_ = ContentTooLarge, false;
 
 	if (!chunked_)
@@ -79,12 +77,18 @@ bool HttpRequest::parseHeaders()
 	return true;
 }
 
+bool parseFixedBody(std::string &rawBuffer, size_t &bytesParsed, std::string &body, bool &complete, size_t contentLength);
+bool parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, std::string &body, bool &complete, int &errorCode, size_t maxBodySize);
+
 void HttpRequest::parseBody()
 {
 	if (chunked_)
+	{
 		while (!complete_ && parseChunkedBody(rawBuffer_, bytesParsed_, body_, complete_, errorCode_, maxBodySize_))
 			cleanBuffer();
-
+		if (complete_)
+			contentLength_ = body_.size();
+	}
 	else if (parseFixedBody(rawBuffer_, bytesParsed_, body_, complete_, contentLength_))
 		cleanBuffer();
 }
@@ -103,6 +107,7 @@ void HttpRequest::parse(const std::string &rawBytes)
 		if (!parseHeaders())
 			return ;
 		cleanBuffer();
+		return ; // pause here caller must set maxBodySize then call parse("") to continue
 	}
 	parseBody();
 }
@@ -123,9 +128,12 @@ void HttpRequest::reset()
 	requestLineParsed_	= false;
 	headerParsed_		= false;
 	chunked_			= false;
+	maxBodySizeSet_		= false;
+	connectionClose_	= true;
 	errorCode_			= 0;
 	bytesParsed_		= 0;
 	contentLength_		= 0;
+	maxBodySize_		= 0;
 	method_.clear();
 	uri_.clear();
 	version_.clear();
@@ -134,13 +142,36 @@ void HttpRequest::reset()
 	// rawBuffer_ is not cleared to allow for pipelined requests
 }
 
-HttpRequest::HttpRequest(size_t maxBodySize) : vhost(NULL), route(NULL), complete_(false), headerParsed_(false), requestLineParsed_(false), errorCode_(0), maxBodySize_(maxBodySize), bytesParsed_(0), contentLength_(0), chunked_(false) { }
+bool HttpRequest::hasCgi() const
+{
+	if (!route || route->cgis().empty())
+		return false;
 
-bool										HttpRequest::complete()			const { return complete_; }
+	std::string path = uri_.substr(0, uri_.find('?'));
+
+	for (std::map<std::string, std::string>::const_iterator it = route->cgis().begin(); it != route->cgis().end(); ++it)
+	{
+		const std::string& ext = it->first;
+		size_t ext_pos = path.find(ext);
+		if (ext_pos != std::string::npos && (ext_pos + ext.length() == path.length() || path[ext_pos + ext.length()] == '/'))
+			return true;
+	}
+
+	return false;
+}
+
+HttpRequest::HttpRequest() : vhost(NULL), route(NULL), complete_(false), requestLineParsed_(false), headerParsed_(false), errorCode_(0), maxBodySize_(0), maxBodySizeSet_(false), bytesParsed_(0), contentLength_(0), chunked_(false), connectionClose_(true) { }
+
+void HttpRequest::setMaxBodySize(size_t maxBodySize) { maxBodySize_ = maxBodySize; maxBodySizeSet_ = true; }
+
+bool										HttpRequest::complete()			const { return complete_ || errorCode_ != 0; }
+bool										HttpRequest::headersComplete()	const { return headerParsed_; }
 const std::string							&HttpRequest::method()			const { return method_; }
 const std::string							&HttpRequest::uri()				const { return uri_; }
 const std::string							&HttpRequest::version()			const { return version_; }
 const std::map<std::string, std::string>	&HttpRequest::headers()			const { return headers_; }
 const std::string							&HttpRequest::body()			const { return body_; }
 size_t										HttpRequest::contentLength()	const { return contentLength_; }
-int											HttpRequest::errorCode()		const { return errorCode_; }
+bool										HttpRequest::erroneous()		const { return errorCode_ != 0; }
+bool										HttpRequest::connectionClose()	const { return connectionClose_; }
+HttpStatus::Code							HttpRequest::errorCode()		const { return static_cast<Code>(errorCode_); }

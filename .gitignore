@@ -18,3 +18,8 @@ a.out
 
 # language server config
 .clangd
+
+# build files
+*.o
+webserv
+.installed

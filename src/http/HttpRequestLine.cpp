@@ -1,6 +1,7 @@
-#include "http/HttpRequest.hpp"		// MAX_REQUEST_LINE_SIZE
+#include "http/HttpRequest.hpp"		// NEED_MORE_DATA, VALID
 #include "http/HttpStatusCodes.hpp"	// BadRequest, URITooLong, HTTPVersionNotSupported, NotImplemented
 #include "utils/StringUtils.hpp"	// isAllDigits
+#include "Defaults.hpp"				// MAX_REQUEST_LINE_SIZE
 
 #include <string>					// string
 #include <algorithm>				// count

@@ -1,8 +1,11 @@
 #include "http/HttpRequest.hpp"		// MAX_HEADER_SIZE
 #include "http/HttpStatusCodes.hpp"	// BadRequest, RequestHeaderFieldsTooLarge
 #include "utils/StringUtils.hpp"	// toLower, trim, hasInvalidChar
+#include "Defaults.hpp"				// MAX_HEADER_SIZE
 
 #include <cstdlib>					// size_t, strtoul
+
+
 
 using namespace HttpStatus;
 using namespace StringUtils;
@@ -61,7 +64,7 @@ static int validateHeaderFieldsFormat(const std::string &rawHeaderFields)
 	return VALID;
 }
 
-static int parseHeaderField(const std::string &line, bool &seenContentLength, std::map<std::string, std::string> &parsed)
+static int parseHeaderField(const std::string &line, bool &seenContentLength, size_t &contentLength, bool &chunked, bool &connectionClose, std::map<std::string, std::string> &parsed)
 {
 	size_t colonPos = line.find(':');
 	if (colonPos == std::string::npos)
@@ -78,18 +81,42 @@ static int parseHeaderField(const std::string &line, bool &seenContentLength, st
 		if (seenContentLength)
 			return BadRequest;
 		seenContentLength = true;
+		if (value.empty() || !std::isdigit((unsigned char)value.at(0)))
+			return BadRequest;
+		char *end;
+		contentLength = std::strtoul(value.c_str(), &end, 10);
+		if (*end)
+			return BadRequest;
 	}
-
+	else if (name == "transfer-encoding")
+		chunked = isChunkedEncoding(value);
+	else if (name == "connection")
+	{
+		size_t pos = 0;
+		while (pos < value.size())
+		{
+			size_t comma = value.find(',', pos);
+			std::string token = toLower(trim(value.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos)));
+			if (token == "close")
+			{
+				connectionClose = true;
+				break ;
+			}
+			else if (token == "keep-alive")
+				connectionClose = false;
+			if (comma == std::string::npos)
+				break ;
+			pos = comma + 1;
+		}
+	}
 	else if (name == "host")
 	{
 		static const std::string allowedSpecials = ".-_~!$&'()*+,;=%";
-		size_t colon = value.find(':');
-		std::string host = value.substr(0, colon);
-
+		size_t		colon	= value.find(':');
+		std::string host	= value.substr(0, colon);
 		for (size_t i = 0; i < host.size(); ++i)
 			if (!std::isalnum((unsigned char)host[i]) && allowedSpecials.find(host[i]) == std::string::npos)
 				return BadRequest;
-
 		if (colon != std::string::npos && !StringUtils::isAllDigits(value, colon + 1))
 			return BadRequest;
 	}
@@ -98,36 +125,16 @@ static int parseHeaderField(const std::string &line, bool &seenContentLength, st
 	return VALID;
 }
 
-static int resolveBodyEncoding(const std::string &version, size_t &contentLength, bool &chunked, std::map<std::string, std::string> &parsed)
+static int resolveBodyEncoding(const std::string &version, bool chunked, const std::map<std::string, std::string> &parsed)
 {
-	std::map<std::string, std::string>::const_iterator transferEncoding = parsed.find("transfer-encoding");
-	chunked = (transferEncoding != parsed.end() && isChunkedEncoding(transferEncoding->second));
-
 	if (chunked && version == "HTTP/1.0")
 		return BadRequest;
-
-	if (!chunked)
-	{
-		std::map<std::string, std::string>::const_iterator contentLengthIterator = parsed.find("content-length");
-		if (contentLengthIterator != parsed.end())
-		{
-			if (contentLengthIterator->second.empty() || !std::isdigit((unsigned char)contentLengthIterator->second.at(0)))
-				return BadRequest;
-
-			char *end;
-			contentLength = std::strtoul(contentLengthIterator->second.c_str(), &end, 10);
-			if (*end)
-				return BadRequest;
-		}
-	}
-
 	if (version == "HTTP/1.1" && parsed.find("host") == parsed.end())
 		return BadRequest;
-
 	return VALID;
 }
 
-int validateHeaders(const std::string &rawHeaderFields, bool complete, const std::string &version, size_t &contentLength, bool &chunked, std::map<std::string, std::string> &parsed)
+int validateHeaders(const std::string &rawHeaderFields, bool complete, const std::string &version, size_t &contentLength, bool &chunked, bool &connectionClose, std::map<std::string, std::string> &parsed)
 {
 	if (int result = validateHeaderFieldsFormat(rawHeaderFields))
 		return result;
@@ -144,7 +151,7 @@ int validateHeaders(const std::string &rawHeaderFields, bool complete, const std
 			? rawHeaderFields.substr(pos)
 			: rawHeaderFields.substr(pos, lineEnd - pos);
 
-		if (int result = parseHeaderField(line, seenContentLength, parsed))
+		if (int result = parseHeaderField(line, seenContentLength, contentLength, chunked, connectionClose, parsed))
 			return result;
 
 		if (lineEnd == std::string::npos)
@@ -152,5 +159,5 @@ int validateHeaders(const std::string &rawHeaderFields, bool complete, const std
 		pos = lineEnd + 2;
 	}
 
-	return resolveBodyEncoding(version, contentLength, chunked, parsed);
+	return resolveBodyEncoding(version, chunked, parsed);
 }

@@ -2,36 +2,55 @@
 #include "config/VirtualHost.hpp"	// VirtualHost
 #include "utils/NetworkUtils.hpp"	// Interface, resolve
 #include "utils/StringUtils.hpp"	// toString
+#include "Defaults.hpp"				// DefaultConfig
 
 #include <cstddef>					// size_t
+#include <ctime>					// time_t
 #include <iostream>					// cerr, endl, streamsize
 #include <limits>					// numeric_limits
 #include <stdexcept>				// runtime_error
 #include <algorithm>				// find
+#include <cstdlib>					// strtol
+#include <string>					// string, rfind
 
 typedef void (Config::*LocationDirectiveHandler)(Route &);
 typedef void (Config::*ServerDirectiveHandler)(VirtualHost &, Route &);
 
-Config::Config(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints) : tokenStream_(filePath)	{ parse(filePath, hosts, endpoints); }
-Config::Config(VirtualHosts &hosts, ListenEndpoints &endpoints) : tokenStream_(DefaultConfig)							{ parse(DefaultConfig, hosts, endpoints); }
+Config::Config(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints, time_t &timeout) : tokenStream_(filePath)	{ parse(filePath, hosts, endpoints, timeout); }
+Config::Config(VirtualHosts &hosts, ListenEndpoints &endpoints, time_t &timeout) : tokenStream_(DefaultConfig)							{ parse(DefaultConfig, hosts, endpoints, timeout); }
 
-void Config::parse(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints)
+void Config::parse(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints, time_t &timeout)
 {
 	std::ifstream configIfs(filePath.c_str());
+	size_t slash = filePath.rfind('/');
+	confDir_ = (slash != std::string::npos) ? filePath.substr(0, slash) : ".";
 	if (!configIfs)
-		throw std::runtime_error("Failed to open config file: " + filePath);
+		throw std::runtime_error(StringUtils::currentTime() + " [error] Failed to open config file: " + filePath);
 
 	tokenize(configIfs);
 
 	InterfaceToServerNames registeredNames;
 	while (!tokenStream_.done())
-		parseServerBlock(hosts, endpoints, registeredNames);
+	{
+		if (tokenStream_.accept("timeout"))
+		{
+			const std::string val = tokenStream_.expect(TokenStream::Token::DirectiveWord);
+			char *end;
+			long parsed = std::strtol(val.c_str(), &end, 10);
+			if (end == val.c_str() || *end != '\0' || parsed <= 0)
+				throw std::runtime_error(StringUtils::currentTime() + " [error] Invalid timeout value: \"" + val + "\"");
+			timeout = static_cast<time_t>(parsed);
+			tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
+		}
+		else
+			parseServerBlock(hosts, endpoints, registeredNames);
+	}
 
 	if (hosts.empty())
 	{
 		Interface endpoint;
 		if (!NetworkUtils::resolve("localhost", "8080", endpoint))
-			throw std::runtime_error("Failed to resolve default endpoint");
+			throw std::runtime_error(StringUtils::currentTime() + " [error] Failed to resolve default endpoint");
 		VirtualHost virtualHost;
 		hosts.push_back(VirtualHost::applyDefaults(virtualHost));
 		endpoints[endpoint].push_back(&hosts.back());
@@ -46,12 +65,28 @@ void Config::tokenize(std::ifstream &configIfs)
 	{
 		switch (next)
 		{
-		case '\n': ++tokenStream_.currentTokenizationLine; tokenStream_.currentTokenizationColumn = 0;															configIfs.ignore(); break;
+		case '\n': ++tokenStream_.currentTokenizationLine; tokenStream_.currentTokenizationColumn = 1;															configIfs.ignore(); break;
 		case ' ': case '\t': case '\r': ++tokenStream_.currentTokenizationColumn;																				configIfs.ignore(); break;
 		case '{': tokenStream_.push(TokenStream::Token::BlockOpen); ++tokenStream_.currentTokenizationColumn;												configIfs.ignore(); break;
 		case '}': tokenStream_.push(TokenStream::Token::BlockClose); ++tokenStream_.currentTokenizationColumn;											configIfs.ignore(); break;
 		case ';': tokenStream_.push(TokenStream::Token::DirectiveDelimiter); ++tokenStream_.currentTokenizationColumn;									configIfs.ignore(); break;
-		case '#': configIfs.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); tokenStream_.currentTokenizationColumn = 0; ++tokenStream_.currentTokenizationLine;	break;
+		case '#': configIfs.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); tokenStream_.currentTokenizationColumn = 1; ++tokenStream_.currentTokenizationLine;	break;
+		case '"':
+			configIfs.ignore(); // skip opening quote
+			{
+				TokenStream::Token word;
+				word.line	= tokenStream_.currentTokenizationLine;
+				word.column	= tokenStream_.currentTokenizationColumn;
+				while ((next = configIfs.peek()) != EOF && next != '"' && next != '\n')
+				{
+					word.content += (char)configIfs.get();
+					++tokenStream_.currentTokenizationColumn;
+				}
+				if (next == '"')
+					configIfs.ignore(); // skip closing quote
+				tokenStream_.push(word);
+			}
+			break;
 		default:
 			TokenStream::Token word;
 			word.line	= tokenStream_.currentTokenizationLine;
@@ -88,13 +123,13 @@ void Config::parseServerBlock(VirtualHosts &hosts, ListenEndpoints &endpoints, I
 		else if (tokenStream_.accept("listen"))
 			parseListen(currentServerBlockEndpoints);
 		else if (!parseServerDirective(virtualHost, defaults) && !parseLocationDirective(defaults))
-			throw std::runtime_error(tokenStream_.filePath + ":" + StringUtils::toString(tokenStream_.peek().line) +
+			throw std::runtime_error(StringUtils::currentTime() + tokenStream_.filePath + ":" + StringUtils::toString(tokenStream_.peek().line) +
 															":" + StringUtils::toString(tokenStream_.peek().column) +
 															": error: unknown directive '" + tokenStream_.peek().content + "'");
 	}
 
 	if (currentServerBlockEndpoints.empty())
-		throw std::runtime_error("Server block must have a listen directive");
+		throw std::runtime_error(StringUtils::currentTime() + " [error] Server block must have a listen directive");
 
 	tokenStream_.setPosition(serverBlockStart);
 	while (!tokenStream_.accept(TokenStream::Token::BlockClose))
@@ -127,7 +162,7 @@ void Config::parseLocationBlock(VirtualHost &virtualHost, Route &defaults)
 
 	while (!tokenStream_.accept(TokenStream::Token::BlockClose))
 		if (!parseLocationDirective(route))
-			throw std::runtime_error(tokenStream_.filePath + ":" + StringUtils::toString(tokenStream_.peek().line) +
+			throw std::runtime_error(StringUtils::currentTime() + tokenStream_.filePath + ":" + StringUtils::toString(tokenStream_.peek().line) +
 															":" + StringUtils::toString(tokenStream_.peek().column) +
 															": error: unknown directive '" + tokenStream_.peek().content + "'");
 
@@ -154,7 +189,7 @@ bool Config::parseServerDirective(VirtualHost &virtualHost, Route &defaults)
 			locationOnlyHandlers.push_back("redirect");
 		}
 		if (std::find(locationOnlyHandlers.begin(), locationOnlyHandlers.end(), tokenStream_.peek().content) != locationOnlyHandlers.end())
-			throw std::runtime_error(tokenStream_.filePath + ":" + StringUtils::toString(tokenStream_.peek().line) +
+			throw std::runtime_error(StringUtils::currentTime() + tokenStream_.filePath + ":" + StringUtils::toString(tokenStream_.peek().line) +
 															":" + StringUtils::toString(tokenStream_.peek().column) +
 															": error: directive '" + tokenStream_.peek().content + "' not allowed at server level");
 		return false;
@@ -178,7 +213,7 @@ bool Config::parseLocationDirective(Route &route)
 		handlers["index"]				= &Config::parseIndex;
 		handlers["autoIndex"]			= &Config::parseAutoIndex;
 		handlers["clientMaxBodySize"]	= &Config::parseMaxBodySize;
-		handlers["methods"]				= &Config::parseMethods;
+		handlers["allowedMethods"]		= &Config::parseAllowedMethods;
 	}
 	std::map<std::string, LocationDirectiveHandler>::const_iterator handler = handlers.find(tokenStream_.peek().content);
 	if (handler == handlers.end())
@@ -186,4 +221,11 @@ bool Config::parseLocationDirective(Route &route)
 	tokenStream_.expect(TokenStream::Token::DirectiveWord);
 	(this->*handler->second)(route);
 	return true;
+}
+
+std::string Config::relativeToConfDir(const std::string &path) const
+{
+	if (path.empty() || path[0] == '/')
+		return path;
+	return confDir_ + "/" + path;
 }

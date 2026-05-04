@@ -1,15 +1,12 @@
 #pragma once
 
+#include "config/Config.hpp"		// ListenEndpoints
 #include "core/IPollable.hpp"		// IPollable
 #include "core/Socket.hpp"			// Socket
 #include "utils/NetworkUtils.hpp"	// Interface
 #include "http/HttpRequest.hpp"		// HttpRequest
 #include "http/HttpResponse.hpp"	// HttpResponse
 #include "cgi/Cgi.hpp"				// CGIProcess
-
-
-
-
 
 
 
@@ -32,7 +29,7 @@ class Client : public IPollable
 
 public:
 
-	Client(int fd, const Interface &iface, IOReactor &reactor);
+	Client(int fd, const Interface &iface, IOReactor &reactor, const ListenEndpoints &endpoints);
 	~Client();
 
 	int	readFd() const;
@@ -40,6 +37,10 @@ public:
 
 	void onRead();
 	void onWrite();
+	void onTimeout();
+	void onCgiComplete();
+
+	void clearCgi();
 
 	Socket		socket;
 	Interface	iface;
@@ -47,13 +48,15 @@ public:
 	HttpRequest		request;
 	HttpResponse	response;
 
-	std::string	writeBuffer; // move to response later
-	size_t		writeOffset; // move to response later
-	
-	time_t	lastActive;
+	const ListenEndpoints &endpoints;
+
+	std::string	writeBuffer;
+	size_t		writeOffset;
+
 	bool	keepAlive;
 
-	CGIProcess	*cgi; // allocated in CGIHandler::start(client), deleted in CGIHandler::finish/kill and ~Client
+
+	CGIProcess *cgi; // allocated in Client::onRead(), deleted in CGIHandler::finish/kill and ~Client
 
 private:
 

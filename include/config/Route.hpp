@@ -15,9 +15,6 @@
 
 
 
-#define InstallDir "/usr/local/webserv"
-#define HtmlDir InstallDir "/html"
-
 
 
 
@@ -36,7 +33,7 @@ public:
 
 	const std::string								&path() const;
 	size_t											maxBodySize() const;
-	const std::vector<std::string>					&methods() const;
+	const std::vector<std::string>					&allowedMethods() const;
 	const std::string								&root() const;
 	bool											redirected() const;
 	const std::string								&redirectPage() const;
@@ -58,13 +55,13 @@ public:
 	void	addErrorPage(const std::string &code, const std::string &page);
 	void	setUpload(const std::string &upload);
 
-	void	clearMethods();
+	void	clearAllowedMethods();
 
 private:
 
 	size_t									maxBodySize_;
 	std::string								path_;
-	std::vector<std::string>				methods_;
+	std::vector<std::string>				allowedMethods_;
 	std::string								root_;
 	bool									redirect_;
 	std::string								redirectPage_;

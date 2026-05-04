@@ -1,158 +1,104 @@
-#include "http/HttpResponse.hpp"
-#include <dirent.h>                 // opendir, readdir, closedir
-#include <sstream>                  // ostringstream
-#include <sys/stat.h>               // stat
-#include <ctime.h>
-#include <iomanip> 
+#include "http/HttpResponse.hpp"	// HttpResponse
+#include "utils/StringUtils.hpp"	// toString
 
-HttpResponse::HttpResponse(void): status_(HttpStatus::OK){}
+#include <sstream>					// ostringstream
 
-HttpResponse::HTTPStatus(HTTPStatus::Code status) {
-    status_ = status;
+void HttpResponse::init()
+{
+	headers_["Content-Type"]	= "text/plain";
+	headers_["Connection"]		= "close";
+	headers_["Content-Length"]	= "0";
 }
 
-HttpResponse::setHeader(const std::string &name, const std::string &value) {
-    headers_[name] = value;
+HttpResponse::HttpResponse(void): status_(HttpStatus::OK)
+{
+	init();
 }
 
-HttpResponse::setBody(const std::string &body) {
-    body_ = body;
+HttpResponse::HttpResponse(const std::string &rawResponse) : status_(HttpStatus::OK)
+{
+	init();
+
+	size_t headerEnd = rawResponse.find("\r\n\r\n");
+	if (headerEnd == std::string::npos)
+	{
+		setBody(rawResponse);
+		return ;
+	}
+
+	std::string headerSection	= rawResponse.substr(0, headerEnd);
+	std::string body			= rawResponse.substr(headerEnd + 4);
+
+	size_t pos = 0;
+	while (pos < headerSection.size())
+	{
+		size_t		lineEnd	= headerSection.find("\r\n", pos);
+		std::string	line	= headerSection.substr(pos, lineEnd == std::string::npos ? std::string::npos : lineEnd - pos);
+		size_t		colon	= line.find(':');
+		if (colon != std::string::npos)
+			setHeader(StringUtils::trim(line.substr(0, colon)), StringUtils::trim(line.substr(colon + 1)));
+		if (lineEnd == std::string::npos)
+			break ;
+		pos = lineEnd + 2;
+	}
+	setBody(body);
 }
 
-std::string HttpResponse::serialize(void) const {
-    std::ostringstream ores;
+void HttpResponse::setStatus(HttpStatus::Code status)							{ status_						= status; }
+void HttpResponse::setHeader(const std::string &name, const std::string &value)	{ headers_[name]				= value; }
+void HttpResponse::setBody(const std::string &body)								{ headers_["Content-Length"]	= StringUtils::toString(body.size()); body_ = body; }
+void HttpResponse::setContentType(const std::string &type)						{ headers_["Content-Type"]		= type.empty() ? "text/plain" : type; }
 
-    // 1.1 or 1.0? it depend, let's just stick with 1.1 for now.
-    ores << "HTTP/1.1 " << std::static_cast<int>(status_) << " " << HttpStatus::reasonPhrase(status_) << "\r\n";
+std::string HttpResponse::serialize(void) const
+{
+	std::ostringstream ores;
 
-    // write headers, but need more checks ...
-    for (std::map<std::string, std::string>::const_iterator it = headers_.begin(); it != headers_.end(); ++it) {
-        ores << it->first << ": " << it->second << "\r\n";
-    }
+	// HTTP/1.1 responses to 1.0 requests are valid as long as we avoid 1.1-only features
+	ores << "HTTP/1.1 " << static_cast<int>(status_) << " " << HttpStatus::reasonPhrase(status_) << "\r\n";
 
-    // Content-Length: we need to decide where to set it to avoid the overhead of find, 
-    // for now let's just pretend that it not set.
-    if (headers_.find("Content-Length") == headers_.end()) {
-        ores << "Content-Length: " << body_.size() << "\r\n";
-    }
+	// write headers
+	for (std::map<std::string, std::string>::const_iterator it = headers_.begin(); it != headers_.end(); ++it)
+		ores << it->first << ": " << it->second << "\r\n";
+	ores << "\r\n";
 
-    // Connection: default close, but it depend on the requested client;
-    if (headers_.find("Connection") == headres_.end()) {
-        ores << "Connection: close" << "\r\n";
-    }
-
-    //end of headers;
-    ores << "\r\n";
-
-    // write body
-    ores << body_;
-    return ores.str();
+	// write body
+	ores << body_;
+	return ores.str();
 }
 
-void HttpResponse::setContentType(std::string& type) {
-    if (type.empty()) {
-        // or text/html? 
-        type = "text/plain";
-    }
-    headers_["Content-Type"] = type;
-}
-
-static std::string readFile(const char* filename) {
-    std::ifstream file(filename);
-    if (!file) return "";
-    
-    std::ostringstream buf;
-    buf << file.rdbuf();
-    return buf.str();
-}
-
-static std::string defaultErrorBody(HTTPStatus::Code status) {
-    std::ostringstream out;
-
-    out << "<!doctype html> <html lang=\"en-us\"><head><title>" << static_cast<int>(status) << " - "
-        << HTTPStatus::reasonPhrase(status) << "</title></head>"
-        << "<body><h1>" << static_cast<int>(status) << " " << HTTPStatus::reasonPhrase(status) << "</h1></body></html>"
-     
-    return out.str();
-}
-
-HttpResponse HttpResponse::HttpResponseError(HTTPStatus::Code status, const std::string &pagePath) {
-    HttpResponse res;
-
-    std::string body = readFile(pagePath.c_str());
-    if (body.empty()) {
-        // no file locate at pagePath
-        // serve default error page.
-        body = defaultErrorBody(status);
-    }
-    res.setStatus(status);
-    res.setContentType("text/html");
-    res.setBody(body);
-    
-    return res;
-}
-
-HttpResponse HttpResponse::HttpResponseRedirect(HttpStatus::Code status, const std::string &location) {
-    HttpResponse res;
-
-    if (location.empty()) {
-        location = "/";
-    }
-    res.setStatus(status);
-    res.setHeader("Location", location);
-    res.setContentType("text/html");
-    
-    std::ostringstream body;
-    body << "<!doctype html> <html lang=\"en-us\"><head><title>Redirect ...</title></head>"
-         << "<body> redirecting to <a href=\"" << location << "\"></a></body></html>";
-    res.setBody(body.str());
-    return res;
-}
-
-HttpResponse HttpResponse::HttpDirListing(const std::string &uri, const std::string &path) {
-    DIR *dir = opendir(path.c_str());
-    if (!dir) {
-        // or 404?
-        return HttpResponseError(HttpStatus::Code::Forbidden, "/html/403.html");
-    }
-
-    std::ostringstream body;
-    body << "<html><head><title>Index of " << uri << "</title></head>"
-         << "<body><h1>Index of " << uri << "</h1><hr><pre><a href=\"../\">../</a>\n";
-
-    struct dirent *content;
-    while ((content = readdir(dir)) != NULL) {
-        struct stat st;
-        std::string name(content->d_name);
-        if (name == "." || name == "..") {
-            continue;
-        }
-
-        if (stat((path + "/" + name).c_str(), &st) != 0) {
-            continue;
-        }
-        bool isDir = S_ISDIR(st.st_mode);
-        std::string display = name + (isDir ? "/" : "");
-
-        char displayTime[32];
-        std::strftime(displayTime, sizeof(displayTime), "%d-%b-%Y %H:%M", std::localtime(&st.st_mtime));
-        body << "<a href=\"" << display << "\">"
-             << std::left << std::setw(50) << display << "</a>"
-             << std::setw(20) << displayTime;
-
-        if (isDir){
-            body << std::setw(20) << "-";
-        } else {
-            body << std::setw(20) << st.st_size;
-        }
-        body << "\r\n";
-    }
-    closedir(dir);
-    body << "</pre><hr></body>\r\n</html>\r\n";
+HttpResponse HttpResponse::HttpErrorResponse(HttpStatus::Code status)
+{
+	std::ostringstream body;
+	body << "<!doctype html><html lang=\"en-us\"><head><title>" << static_cast<int>(status) << " - " << HttpStatus::reasonPhrase(status) << "</title></head>"
+		<< "<body><h1>" << static_cast<int>(status) << " " << HttpStatus::reasonPhrase(status) << "</h1></body></html>";
 
 	HttpResponse res;
-	res.setStatus(HttpStatus::OK);
+	res.setStatus(status);
 	res.setContentType("text/html");
 	res.setBody(body.str());
 	return res;
 }
+
+HttpResponse HttpResponse::HttpResponseRedirect(HttpStatus::Code status, const std::string &location)
+{
+	std::ostringstream body;
+	body << "<!doctype html><html lang=\"en-us\"><head><title>Redirect</title></head><body>redirecting to <a href=\"" << location << "\"></a></body></html>";
+
+	HttpResponse res;
+	res.setStatus(status);
+	res.setHeader("Location", location);
+	res.setContentType("text/html");
+	res.setBody(body.str());
+	return res;
+}
+
+void HttpResponse::reset(void)
+{
+	status_ = HttpStatus::OK;
+	headers_.clear();
+	init();
+	body_.clear();
+}
+
+HttpStatus::Code	HttpResponse::statusCode()	const { return status_; }
+size_t				HttpResponse::bodySize()	const { return body_.size(); }

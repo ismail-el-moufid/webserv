@@ -1,12 +1,19 @@
 #include "core/Client.hpp"
 #include "core/IOReactor.hpp"
 #include "cgi/Cgi.hpp"
+#include "http/HttpPipeline.hpp"
+#include "utils/StringUtils.hpp"
+#include <iostream>
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define DEFAULT_MAX_BODY_SIZE (1024 * 1024)  // 1MB
+#define WAIT_FOR_CLIENT_DATA		POLLIN
+#define WAIT_TO_SEND_RESPONSE		POLLOUT
+#define WAIT_FOR_CLIENT_AND_SEND	(POLLIN | POLLOUT)
+#define WAIT_FOR_CGI				0
+#define CGI_IO						(POLLIN | POLLOUT)
 
-Client::Client(int fd, const Interface &iface, IOReactor &reactor) : IPollable(reactor), socket(fd), iface(iface), request(DEFAULT_MAX_BODY_SIZE), writeOffset(0), keepAlive(false), cgi(NULL) { }
+Client::Client(int fd, const Interface &iface, IOReactor &reactor, const ListenEndpoints &endpts) : IPollable(reactor), socket(fd), iface(iface), endpoints(endpts), writeOffset(0), keepAlive(false), cgi(NULL) { }
 
 Client::~Client()
 {
@@ -20,58 +27,105 @@ Client::~Client()
 	reactor_.remove(*this);
 }
 
-int Client::readFd()  const { return socket.get(); }
-int Client::writeFd() const { return socket.get(); }
+int Client::readFd()	const { return socket.get(); }
+int Client::writeFd()	const { return socket.get(); }
 
 void Client::onRead()
 {
 	char	buffer[4096];
-	ssize_t	bytes = recv(socket.get(), buffer, sizeof(buffer), 0);
+	ssize_t bytes = recv(socket.get(), buffer, sizeof(buffer), 0);
 
 	if (bytes <= 0)
 	{
 		delete this;
 		return ;
 	}
-	request.parse(std::string(buffer, bytes));
-	if (!request.complete())
-		return ;
-	if (request.errorCode())
+
+	try
 	{
-	reactor_.mod(*this, POLLIN | POLLOUT);
-	return ;
+		updateActivity();
+		request.parse(std::string(buffer, bytes));
+
+		if (!request.vhost && request.headersComplete() && !request.erroneous())
+		{
+			HttpPipeline::resolve(request, endpoints, iface);
+			if (request.route)
+				request.setMaxBodySize(request.route->maxBodySize());
+			request.parse(""); // request pauses its parsing right after finishing header parsing to allow us to set max body size, here we just resume it
+			keepAlive = !request.connectionClose();
+		}
+
+		if (!request.complete())
+			return ;
+
+		if (request.hasCgi())
+		{
+			cgi = new CGIProcess(reactor_, *this);
+			CGIHandler::start(*this);
+			if (!cgi)
+			{
+				response = HttpResponse::HttpErrorResponse(HttpStatus::InternalServerError);
+				writeBuffer = response.serialize();
+				HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
+				reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+				return ;
+			}
+			reactor_.add(*cgi, CGI_IO);
+			reactor_.mod(*this, WAIT_FOR_CGI);
+		}
+		else
+		{
+			response = HttpPipeline::buildResponse(request);
+			writeBuffer = response.serialize();
+			HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
+			reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+		}
 	}
-	// hardcoded as if we detected a CGI for now, but later we call the router here to determine if we call static/upload/cgi handler
-	cgi = new CGIProcess(reactor_, *this);
-	CGIHandler::start(*this);
-	int events = POLLIN;
-	if (request.method() == "POST")
-		events |= POLLOUT;
-	reactor_.add(*cgi, events);
-	reactor_.mod(*this, 0);
+	catch (const std::exception &e)
+	{
+		std::cerr << StringUtils::currentTime() << " [error] " << e.what() << "\n";
+		response = HttpResponse::HttpErrorResponse(HttpStatus::InternalServerError);
+		writeBuffer = response.serialize();
+		HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
+		reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+	}
 }
 
 void Client::onWrite()
 {
-	if (writeBuffer.empty())
+	if (writeBuffer.empty() || writeOffset >= writeBuffer.size())
 		return ;
-	size_t sent = send(socket.get(), writeBuffer.c_str() + writeOffset, writeBuffer.size() - writeOffset, 0);
+	ssize_t sent = send(socket.get(), writeBuffer.c_str() + writeOffset, writeBuffer.size() - writeOffset, 0);
 	if (sent <= 0)
-	{
-		delete this;
-		return ;
-	}
+		return delete this;
+
 	writeOffset += sent;
 	if (writeOffset < writeBuffer.size())
 		return ;
 	if (keepAlive)
 	{
 		request.reset();
-		response = HttpResponse();
+		request.parse(""); // re-parse leftover from rawBuffer_ from position 0
+		response.reset();
 		writeBuffer.clear();
 		writeOffset = 0;
-		reactor_.mod(*this, POLLIN);
+		reactor_.mod(*this, WAIT_FOR_CLIENT_DATA);
 	}
 	else
 		delete this;
 }
+
+void Client::onCgiComplete()
+{
+	writeBuffer = response.serialize();
+	HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
+	reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+}
+
+void Client::clearCgi()
+{
+	delete cgi;
+	cgi = NULL;
+}
+
+void Client::onTimeout() { delete this; }

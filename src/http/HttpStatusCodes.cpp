@@ -27,7 +27,7 @@ std::string reasonPhrase(int code)
 	case 501:	return "Not Implemented";
 	case 504:	return "Gateway Timeout";
 	case 505:	return "HTTP Version Not Supported";
-	default:	 return std::string();
+	default:	return std::string();
 	}
 }
 

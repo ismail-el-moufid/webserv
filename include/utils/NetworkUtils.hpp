@@ -16,12 +16,9 @@
 
 
 
-
-
-
-
-
 typedef struct { sa_family_t family; sockaddr_storage addr; socklen_t addrlen; } Interface;
+
+
 
 
 
