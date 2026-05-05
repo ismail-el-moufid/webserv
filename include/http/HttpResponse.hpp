@@ -27,7 +27,6 @@ class HttpResponse
 	public:
 
 		HttpResponse(void);
-		HttpResponse(const std::string &rawResponse);
 
 		void init();
 

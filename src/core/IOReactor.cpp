@@ -58,8 +58,8 @@ void IOReactor::remove(int fd)
 
 void IOReactor::add(IPollable &pollable, int events)
 {
-	if (events & POLLIN)  add(pollable.readFd(),  POLLIN,  pollable);
-	if (events & POLLOUT) add(pollable.writeFd(), POLLOUT, pollable);
+	if (events & POLLIN)	add(pollable.readFd(),	POLLIN,		pollable);
+	if (events & POLLOUT)	add(pollable.writeFd(),	POLLOUT,	pollable);
 }
 
 void IOReactor::mod(IPollable &pollable, int events)
@@ -67,7 +67,7 @@ void IOReactor::mod(IPollable &pollable, int events)
 	if (pollable.readFd() != pollable.writeFd())
 	{
 		if (events & POLLIN)
-			add(pollable.readFd(),  POLLIN,  pollable);
+			add(pollable.readFd(),	POLLIN,	pollable);
 		else
 			remove(pollable.readFd());
 
@@ -89,70 +89,70 @@ void IOReactor::remove(IPollable &pollable)
 
 void IOReactor::waitAndDispatch(int timeToWaitInMS)
 {
-    if (pfds_.empty() || poll(&pfds_.at(0), pfds_.size(), timeToWaitInMS) <= 0)
-        return ;
+	if (pfds_.empty() || poll(&pfds_.at(0), pfds_.size(), timeToWaitInMS) <= 0)
+		return ;
 
-    ready_revents_.clear();
-    ready_fds_.clear();
+	ready_revents_.clear();
+	ready_fds_.clear();
 
-    // Snapshot fds that are ready
-    for (size_t i = 0; i < pfds_.size(); ++i)
-    {
-        if (pfds_.at(i).revents != 0)
-        {
-            ready_revents_.push_back(pfds_.at(i).revents);
-            ready_fds_.push_back(pfds_.at(i).fd);
-        }
-    }
+	// Snapshot fds that are ready
+	for (size_t i = 0; i < pfds_.size(); ++i)
+	{
+		if (pfds_.at(i).revents != 0)
+		{
+			ready_revents_.push_back(pfds_.at(i).revents);
+			ready_fds_.push_back(pfds_.at(i).fd);
+		}
+	}
 
-    // Dispatch events for ready fds
-    for (size_t i = 0; i < ready_fds_.size(); ++i)
-    {
-        if (!REGISTERED(ready_fds_.at(i)))
-            continue;
-        
-        IPollable *pol = pollables_.at(fd_to_index_.at(ready_fds_.at(i)));
-        
-        if (ready_revents_.at(i) & POLLIN)
-            pol->onRead();
-        
-        // Re-check registration as onRead() might have deleted the object
-        if (REGISTERED(ready_fds_.at(i)) && pollables_.at(fd_to_index_.at(ready_fds_.at(i))) == pol)
-        {
-            if (ready_revents_.at(i) & POLLOUT)
-                pol->onWrite();
-        }
-    }
+	// Dispatch events for ready fds
+	for (size_t i = 0; i < ready_fds_.size(); ++i)
+	{
+		if (!REGISTERED(ready_fds_.at(i)))
+			continue;
+		
+		IPollable *pol = pollables_.at(fd_to_index_.at(ready_fds_.at(i)));
+		
+		if (ready_revents_.at(i) & POLLIN)
+			pol->onRead();
+		
+		// Re-check registration as onRead() might have deleted the object
+		if (REGISTERED(ready_fds_.at(i)) && pollables_.at(fd_to_index_.at(ready_fds_.at(i))) == pol)
+		{
+			if (ready_revents_.at(i) & POLLOUT)
+				pol->onWrite();
+		}
+	}
 
-    // Check for timeouts on inactive connections
-    // We iterate backward because onTimeout() can call remove(), which uses swap-and-pop.
-    // Backward iteration ensures that removing the current element (or any element after it)
-    // does not affect the indices of the elements we still need to process.
-    time_t now = time(NULL);
-    for (size_t i = pfds_.size(); i > 0; --i)
-    {
-        size_t current_idx = i - 1;
+	// Check for timeouts on inactive connections
+	// We iterate backward because onTimeout() can call remove(), which uses swap-and-pop.
+	// Backward iteration ensures that removing the current element (or any element after it)
+	// does not affect the indices of the elements we still need to process.
+	time_t now = time(NULL);
+	for (size_t i = pfds_.size(); i > 0; --i)
+	{
+		size_t current_idx = i - 1;
 
-        // Check if the fd at the current index was already processed in the ready loop
-        bool was_ready = false;
-        for (size_t j = 0; j < ready_fds_.size(); ++j)
-        {
-            if (ready_fds_.at(j) == pfds_.at(current_idx).fd)
-            {
-                was_ready = true;
-                break;
-            }
-        }
-        if (was_ready)
-            continue;
-        
-        // If not ready, check for timeout. This is now safe.
-        IPollable *pol = pollables_.at(current_idx);
-        if (now - pol->lastActive() > timeout_)
-        {
-            pol->onTimeout();
-        }
-    }
+		// Check if the fd at the current index was already processed in the ready loop
+		bool was_ready = false;
+		for (size_t j = 0; j < ready_fds_.size(); ++j)
+		{
+			if (ready_fds_.at(j) == pfds_.at(current_idx).fd)
+			{
+				was_ready = true;
+				break;
+			}
+		}
+		if (was_ready)
+			continue;
+		
+		// If not ready, check for timeout. This is now safe.
+		IPollable *pol = pollables_.at(current_idx);
+		if (now - pol->lastActive() > timeout_)
+		{
+			pol->onTimeout();
+		}
+	}
 }
 
 bool IOReactor::empty() const { return pfds_.empty(); }

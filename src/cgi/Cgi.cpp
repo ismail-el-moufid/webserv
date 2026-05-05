@@ -153,7 +153,6 @@ void CGIHandler::finish(Client &client)
 {
 	int status;
 	CGIProcess &cgi = *client.cgi;
-	HttpResponse &response = client.response;
 
 	if (cgi.pid_ == -1) // We aborted early because the file didn't exist
 	{
@@ -163,10 +162,7 @@ void CGIHandler::finish(Client &client)
 
 	waitpid(cgi.pid_, &status, 0);
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
-	{
-		response.setStatus(HttpStatus::OK);
-		client.response = HttpResponse(cgi.output_buffer_);
-	}
+		client.response = HttpPipeline::buildResponseFromRaw(client.request, cgi.output_buffer_);
 	else
 		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
 }

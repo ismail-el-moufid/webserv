@@ -15,35 +15,6 @@ HttpResponse::HttpResponse(void): status_(HttpStatus::OK)
 	init();
 }
 
-HttpResponse::HttpResponse(const std::string &rawResponse) : status_(HttpStatus::OK)
-{
-	init();
-
-	size_t headerEnd = rawResponse.find("\r\n\r\n");
-	if (headerEnd == std::string::npos)
-	{
-		setBody(rawResponse);
-		return ;
-	}
-
-	std::string headerSection	= rawResponse.substr(0, headerEnd);
-	std::string body			= rawResponse.substr(headerEnd + 4);
-
-	size_t pos = 0;
-	while (pos < headerSection.size())
-	{
-		size_t		lineEnd	= headerSection.find("\r\n", pos);
-		std::string	line	= headerSection.substr(pos, lineEnd == std::string::npos ? std::string::npos : lineEnd - pos);
-		size_t		colon	= line.find(':');
-		if (colon != std::string::npos)
-			setHeader(StringUtils::trim(line.substr(0, colon)), StringUtils::trim(line.substr(colon + 1)));
-		if (lineEnd == std::string::npos)
-			break ;
-		pos = lineEnd + 2;
-	}
-	setBody(body);
-}
-
 void HttpResponse::setStatus(HttpStatus::Code status)							{ status_						= status; }
 void HttpResponse::setHeader(const std::string &name, const std::string &value)	{ headers_[name]				= value; }
 void HttpResponse::setBody(const std::string &body)								{ headers_["Content-Length"]	= StringUtils::toString(body.size()); body_ = body; }

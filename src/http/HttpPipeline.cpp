@@ -50,19 +50,19 @@ const Route *resolveRoute(const VirtualHost &vhost, const std::string &uri)
 
 std::string resolveFilePath(const Route &route, const std::string &uri)
 {
-    std::string path = uri.substr(0, uri.find('?'));
-    
-    std::string root = route.root();
-    
-    // Remove trailing slash from root if it exists
-    if (!root.empty() && root[root.size() - 1] == '/')
-        root.erase(root.size() - 1);
-    
-    // Ensure path starts with a slash
-    if (!path.empty() && path[0] != '/')
-        path = "/" + path;
+	std::string path = uri.substr(0, uri.find('?'));
+	
+	std::string root = route.root();
+	
+	// Remove trailing slash from root if it exists
+	if (!root.empty() && root[root.size() - 1] == '/')
+		root.erase(root.size() - 1);
+	
+	// Ensure path starts with a slash
+	if (!path.empty() && path[0] != '/')
+		path = "/" + path;
 
-    return root + path;
+	return root + path;
 }
 
 bool resolveIndex(const Route &route, const std::string &dirPath, std::string &resolvedFilePath)
@@ -261,6 +261,61 @@ HttpResponse errorResponse(const HttpRequest &request, HttpStatus::Code code)
 	res.setContentType("text/html");
 	res.setBody(body);
 	return res;
+}
+HttpResponse buildResponseFromRaw(const HttpRequest &request, const std::string &rawOutput)
+{
+	size_t	headerEnd		= rawOutput.find("\r\n\r\n");
+	size_t	lineBreakSize	= 4;
+	if (headerEnd == std::string::npos)
+	{
+		headerEnd		= rawOutput.find("\n\n");
+		lineBreakSize	= 2;
+	}
+	if (headerEnd == std::string::npos)
+		return errorResponse(request, HttpStatus::InternalServerError);
+
+	std::string headerSection	= rawOutput.substr(0, headerEnd);
+	std::string body			= rawOutput.substr(headerEnd + lineBreakSize);
+
+	HttpResponse response;
+	size_t pos = 0;
+	while (pos < headerSection.size())
+	{
+		size_t lineEnd	= headerSection.find("\r\n", pos);
+		size_t lineStep	= 2;
+		if (lineEnd == std::string::npos)
+		{
+			lineEnd		= headerSection.find('\n', pos);
+			lineStep	= 1;
+		}
+		std::string	line	= headerSection.substr(pos, lineEnd == std::string::npos ? std::string::npos : lineEnd - pos);
+		size_t		colon	= line.find(':');
+		if (colon != std::string::npos)
+		{
+			std::string name	= StringUtils::trim(line.substr(0, colon));
+			std::string value	= StringUtils::trim(line.substr(colon + 1));
+			if (name == "Status")
+			{
+				char *end;
+				long code = std::strtol(value.c_str(), &end, 10);
+				if (end != value.c_str() && *end == ' ' && HttpStatus::isValidCode(std::string(value.c_str(), 3)))
+					response.setStatus(static_cast<HttpStatus::Code>(code));
+				else
+					response.setStatus(HttpStatus::InternalServerError);
+			}
+			else
+				response.setHeader(name, value);
+		}
+		if (lineEnd == std::string::npos)
+			break ;
+		pos = lineEnd + lineStep;
+	}
+
+	if (HttpStatus::isErrorCode(response.statusCode()) && body.empty())
+		return errorResponse(request, response.statusCode());
+
+	response.setBody(body);
+	return response;
 }
 
 }

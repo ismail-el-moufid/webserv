@@ -227,5 +227,10 @@ std::string Config::relativeToConfDir(const std::string &path) const
 {
 	if (path.empty() || path[0] == '/')
 		return path;
-	return confDir_ + "/" + path;
+	std::string full = confDir_ + "/" + path;
+	char resolved[PATH_MAX];
+	if (realpath(full.c_str(), resolved))
+		return resolved;
+	return full;
 }
+
