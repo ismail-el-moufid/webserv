@@ -1,10 +1,12 @@
 #include "http/HttpResponse.hpp"	// HttpResponse
 #include "utils/StringUtils.hpp"	// toString
+#include "Defaults.hpp"				// SERVER_SOFTWARE
 
 #include <sstream>					// ostringstream
 
 void HttpResponse::init()
 {
+	headers_["Server"]			= SERVER_SOFTWARE;
 	headers_["Content-Type"]	= "text/plain";
 	headers_["Connection"]		= "close";
 	headers_["Content-Length"]	= "0";

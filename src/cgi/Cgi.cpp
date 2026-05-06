@@ -3,6 +3,7 @@
 #include "core/IOReactor.hpp"
 #include "http/HttpPipeline.hpp"
 #include "utils/StringUtils.hpp"
+#include "Defaults.hpp"
 
 #include <signal.h>
 #include <cstdlib>
@@ -69,7 +70,7 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 		else
 			env.push_back("HTTP_" + key + "=" + value);
 	}
-	env.push_back("SERVER_SOFTWARE=WebServ/1.0");
+	env.push_back("SERVER_SOFTWARE="SERVER_SOFTWARE);
 	env.push_back("GATEWAY_INTERFACE=CGI/1.1");
 	env.push_back("REDIRECT_STATUS=200");
 	std::string ip, port, serverName;
