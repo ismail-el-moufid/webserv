@@ -176,12 +176,7 @@ void resolve(HttpRequest &request, const ListenEndpoints &endpoints, const Inter
 	if (it == endpoints.end() || it->second.empty())
 		return ;
 
-	const std::map<std::string, std::string> &headers = request.headers();
-	std::map<std::string, std::string>::const_iterator hostIt = headers.find("Host");
-	std::string host = hostIt != headers.end() ? hostIt->second : "";
-	host.erase(std::min(host.find(':'), host.size()));
-
-	if (!(request.vhost = resolveVhost(it->second, host)))
+	if (!(request.vhost = resolveVhost(it->second, request.host())))
 		return ;
 
 	const std::string &uri = request.uri();
