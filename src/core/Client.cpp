@@ -3,9 +3,11 @@
 #include "cgi/Cgi.hpp"
 #include "http/HttpPipeline.hpp"
 #include "utils/StringUtils.hpp"
+
 #include <iostream>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <algorithm>
 
 #define WAIT_FOR_CLIENT_DATA		POLLIN
 #define WAIT_TO_SEND_RESPONSE		POLLOUT
@@ -57,6 +59,16 @@ void Client::onRead()
 
 		if (!request.complete())
 			return ;
+
+		if (request.route && !request.route->allowedMethods().empty()
+			&& std::find(request.route->allowedMethods().begin(), request.route->allowedMethods().end(), request.method()) == request.route->allowedMethods().end())
+		{
+			response = HttpPipeline::errorResponse(request, HttpStatus::MethodNotAllowed);
+			writeBuffer = response.serialize();
+			HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
+			reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+			return ;
+		}
 
 		if (request.hasCgi())
 		{
@@ -117,6 +129,7 @@ void Client::onWrite()
 
 void Client::onCgiComplete()
 {
+	updateActivity();
 	writeBuffer = response.serialize();
 	HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
 	reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);

@@ -2,7 +2,6 @@
 #include "utils/MimeUtils.hpp"	// MimeUtils::mimeByPath
 #include "utils/StringUtils.hpp"
 
-#include <algorithm>			// find, min
 #include <dirent.h>				// opendir, readdir, closedir
 #include <fstream>				// ifstream
 #include <iomanip>				// setw
@@ -192,9 +191,6 @@ HttpResponse buildResponse(const HttpRequest &request)
 		return errorResponse(request, HttpStatus::NotFound);
 
 	const Route &route = *request.route;
-
-	if (!route.allowedMethods().empty() && std::find(route.allowedMethods().begin(), route.allowedMethods().end(), request.method()) == route.allowedMethods().end())
-		return errorResponse(request, HttpStatus::MethodNotAllowed);
 
 	if (route.maxBodySize() > 0 && request.contentLength() > route.maxBodySize())
 		return errorResponse(request, HttpStatus::ContentTooLarge);

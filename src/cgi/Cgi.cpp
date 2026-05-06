@@ -241,6 +241,7 @@ void CGIProcess::onWrite()
 
 void CGIProcess::onRead()
 {
+	updateActivity();
 	if (CGIHandler::readStdout(*client_))
 	{
 		CGIHandler::finish(*client_);
