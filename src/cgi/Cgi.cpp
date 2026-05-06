@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 std::string CGIHandler::resolveScript(const HttpRequest &request, std::vector<std::string> &env, const Route &route)
 {
@@ -143,7 +144,8 @@ void CGIHandler::start(Client &client)
 		// Child Process
 		dup2(cgi.stdin_.readFd(), STDIN_FILENO);
 		dup2(cgi.stdout_.writeFd(), STDOUT_FILENO);
-
+		// clear the O_NONBLOCK the pipe inherited
+		fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) & ~O_NONBLOCK);
 		execve(argumnets[0], argumnets, envm);
 		exit(1);
 		break ;
