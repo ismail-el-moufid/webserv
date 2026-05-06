@@ -4,8 +4,7 @@
 #include "Defaults.hpp"				// MAX_HEADER_SIZE
 
 #include <cstdlib>					// size_t, strtoul
-
-
+#include <string>					// string
 
 using namespace HttpStatus;
 using namespace StringUtils;
@@ -64,7 +63,7 @@ static int validateHeaderFieldsFormat(const std::string &rawHeaderFields)
 	return VALID;
 }
 
-static int parseHeaderField(const std::string &line, bool &seenContentLength, size_t &contentLength, bool &chunked, bool &connectionClose, std::map<std::string, std::string> &parsed)
+static int parseHeaderField(const std::string &line, bool &seenContentLength, size_t &contentLength, bool &chunked, std::string &host, bool &connectionClose, std::map<std::string, std::string> &parsed)
 {
 	size_t colonPos = line.find(':');
 	if (colonPos == std::string::npos)
@@ -113,12 +112,13 @@ static int parseHeaderField(const std::string &line, bool &seenContentLength, si
 	{
 		static const std::string allowedSpecials = ".-_~!$&'()*+,;=%";
 		size_t		colon	= value.find(':');
-		std::string host	= value.substr(0, colon);
-		for (size_t i = 0; i < host.size(); ++i)
-			if (!std::isalnum((unsigned char)host[i]) && allowedSpecials.find(host[i]) == std::string::npos)
+		std::string	hostTmp	= value.substr(0, colon);
+		for (size_t i = 0; i < hostTmp.size(); ++i)
+			if (!std::isalnum((unsigned char)hostTmp[i]) && allowedSpecials.find(hostTmp[i]) == std::string::npos)
 				return BadRequest;
 		if (colon != std::string::npos && !StringUtils::isAllDigits(value, colon + 1))
 			return BadRequest;
+		host = hostTmp;
 	}
 
 	parsed[name] = value;
@@ -134,7 +134,7 @@ static int resolveBodyEncoding(const std::string &version, bool chunked, const s
 	return VALID;
 }
 
-int validateHeaders(const std::string &rawHeaderFields, bool complete, const std::string &version, size_t &contentLength, bool &chunked, bool &connectionClose, std::map<std::string, std::string> &parsed)
+int validateHeaders(const std::string &rawHeaderFields, bool complete, const std::string &version, size_t &contentLength, bool &chunked, std::string &host, bool &connectionClose, std::map<std::string, std::string> &parsed)
 {
 	if (int result = validateHeaderFieldsFormat(rawHeaderFields))
 		return result;
@@ -151,7 +151,7 @@ int validateHeaders(const std::string &rawHeaderFields, bool complete, const std
 			? rawHeaderFields.substr(pos)
 			: rawHeaderFields.substr(pos, lineEnd - pos);
 
-		if (int result = parseHeaderField(line, seenContentLength, contentLength, chunked, connectionClose, parsed))
+		if (int result = parseHeaderField(line, seenContentLength, contentLength, chunked, host, connectionClose, parsed))
 			return result;
 
 		if (lineEnd == std::string::npos)

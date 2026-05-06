@@ -71,11 +71,17 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 	env.push_back("SERVER_SOFTWARE=WebServ/1.0");
 	env.push_back("GATEWAY_INTERFACE=CGI/1.1");
 	env.push_back("REDIRECT_STATUS=200");
-	// env.push_back("SERVER_NAME=" + );
-	std::string port,ip;
+	std::string ip, port, serverName;
 	NetworkUtils::extractIPPort(iface, ip, port);
+	if (!request.host().empty())
+		serverName = request.host();
+	else if (request.vhost && !request.vhost->names().empty())
+		serverName = request.vhost->names().front();
+	else
+		serverName = ip;
+	env.push_back("SERVER_NAME=" + serverName);
+	env.push_back("REMOTE_ADDR=" + ip);
 	env.push_back("SERVER_PORT=" + port);
-	env.push_back("REMOTE_ADDR=" + ip); 
 	env.push_back("REQUEST_URI=" + request.uri());
 	return env;
 }

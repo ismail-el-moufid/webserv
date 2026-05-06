@@ -41,6 +41,7 @@ public:
 	const std::string							&uri() const;
 	const std::string							&version() const;
 	const std::map<std::string, std::string>	&headers() const;
+	const std::string							&host() const;
 	const std::string							&body() const;
 	size_t										contentLength() const;
 	bool										hasCgi() const;
@@ -80,6 +81,7 @@ private:
 	std::string							uri_;
 	std::string							version_;
 	std::map<std::string, std::string>	headers_;
+	std::string							host_;
 	std::string							body_;
 
 };
