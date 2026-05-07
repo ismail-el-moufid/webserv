@@ -20,8 +20,6 @@
 
 
 
-
-
 class IOReactor;
 
 class Client : public IPollable

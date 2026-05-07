@@ -7,7 +7,7 @@
 
 
 
-#include <ctime>
+#include <ctime>					// time_t
 #include <vector>					// vector
 #include <poll.h>					// struct pollfd
 
