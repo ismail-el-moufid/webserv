@@ -290,9 +290,10 @@ HttpResponse buildResponseFromRaw(const HttpRequest &request, const std::string 
 			if (name == "Status")
 			{
 				char *end;
-				long code = std::strtol(value.c_str(), &end, 10);
-				if (end != value.c_str() && *end == ' ' && HttpStatus::isValidCode(std::string(value.c_str(), 3)))
-					response.setStatus(static_cast<HttpStatus::Code>(code));
+				std::strtol(value.c_str(), &end, 10);
+				std::string codeStr(value.c_str(), end - value.c_str());
+				if (HttpStatus::isValidCode(codeStr))
+					response.setStatus(HttpStatus::toCode(codeStr));
 				else
 					response.setStatus(HttpStatus::InternalServerError);
 			}
