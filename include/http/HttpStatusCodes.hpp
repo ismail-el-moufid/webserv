@@ -31,7 +31,7 @@ namespace HttpStatus
 		SwitchingProtocols				= 101,
 		Processing						= 102,
 		EarlyHints						= 103,
-	
+
 		OK								= 200,
 		Created							= 201,
 		Accepted						= 202,
@@ -42,7 +42,7 @@ namespace HttpStatus
 		MultiStatus						= 207,
 		AlreadyReported					= 208,
 		IMUsed							= 226,
-	
+
 		MultipleChoices					= 300,
 		MovedPermanently				= 301,
 		Found							= 302,
@@ -50,7 +50,7 @@ namespace HttpStatus
 		NotModified						= 304,
 		TemporaryRedirect				= 307,
 		PermanentRedirect				= 308,
-	
+
 		BadRequest						= 400,
 		Unauthorized					= 401,
 		PaymentRequired					= 402,
@@ -80,7 +80,7 @@ namespace HttpStatus
 		TooManyRequests					= 429,
 		RequestHeaderFieldsTooLarge		= 431,
 		UnavailableForLegalReasons		= 451,
-	
+
 		InternalServerError				= 500,
 		NotImplemented					= 501,
 		BadGateway						= 502,

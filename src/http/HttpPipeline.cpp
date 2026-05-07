@@ -8,6 +8,7 @@
 #include <sstream>				// ostringstream
 #include <sys/stat.h>			// stat, S_ISDIR
 #include <iostream>				// cout, ios, left
+#include <cstdlib>				// strtol
 
 namespace
 {
@@ -47,19 +48,13 @@ const Route *resolveRoute(const VirtualHost &vhost, const std::string &uri)
 	return best;
 }
 
-std::string resolveFilePath(const Route &route, const std::string &uri)
+std::string resolveFilePath(const Route &route, const std::string &path)
 {
-	std::string path = uri.substr(0, uri.find('?'));
-	
 	std::string root = route.root();
-	
+
 	// Remove trailing slash from root if it exists
 	if (!root.empty() && root[root.size() - 1] == '/')
 		root.erase(root.size() - 1);
-	
-	// Ensure path starts with a slash
-	if (!path.empty() && path[0] != '/')
-		path = "/" + path;
 
 	return root + path;
 }
@@ -104,8 +99,8 @@ HttpResponse dirListing(const HttpRequest &request, const std::string &path)
 		return HttpPipeline::errorResponse(request, HttpStatus::Forbidden);
 
 	std::ostringstream body;
-	body << "<html><head><title>Index of " << request.uri() << "</title></head><body><h1>Index of "
-		<< request.uri() << "</h1><hr><pre><a href=\"../\">../</a>\n";
+	body << "<html><head><title>Index of " << request.uri().path << "</title></head><body><h1>Index of "
+		<< request.uri().path << "</h1><hr><pre><a href=\"../\">../</a>\n";
 
 	struct dirent *content;
 	while ((content = readdir(dir)) != NULL)
@@ -128,7 +123,7 @@ HttpResponse dirListing(const HttpRequest &request, const std::string &path)
 HttpResponse staticResponse(const HttpRequest &request)
 {
 	const Route	&route		= *request.route;
-	std::string	filePath	= resolveFilePath(route, request.uri());
+	std::string	filePath	= resolveFilePath(route, request.uri().path);
 
 	struct stat st;
 	if (stat(filePath.c_str(), &st) != 0)
@@ -136,16 +131,17 @@ HttpResponse staticResponse(const HttpRequest &request)
 
 	if (S_ISDIR(st.st_mode))
 	{
-		if (request.uri().back() != '/')
-			return HttpResponse::HttpResponseRedirect(HttpStatus::MovedPermanently, request.uri() + "/");
-		std::string index;
+		if (request.uri().path.at(request.uri().path.size() - 1) != '/')
+			return HttpResponse::HttpResponseRedirect(HttpStatus::MovedPermanently, request.uri().path + "/" + 
+				(request.uri().hasQuery ? "?" + request.uri().query : ""));
 
-		if (resolveIndex(route, filePath, index))
-			filePath = index;
-		else if (route.autoIndexed())
-			return dirListing(request, filePath);
-		else
+		if (!resolveIndex(route, filePath, filePath))
+		{
+			if (route.autoIndexed())
+				return dirListing(request, filePath);
+
 			return HttpPipeline::errorResponse(request, HttpStatus::Forbidden);
+		}
 	}
 
 	std::ifstream file(filePath.c_str(), std::ios::binary);
@@ -180,8 +176,7 @@ void resolve(HttpRequest &request, const ListenEndpoints &endpoints, const Inter
 	if (!(request.vhost = resolveVhost(it->second, request.host())))
 		return ;
 
-	const std::string &uri = request.uri();
-	request.route = resolveRoute(*request.vhost, uri.substr(0, uri.find('?')));
+	request.route = resolveRoute(*request.vhost, request.uri().path);
 }
 
 HttpResponse buildResponse(const HttpRequest &request)
@@ -218,7 +213,7 @@ void logRequest(const HttpRequest &request, const HttpResponse &response, const 
 	NetworkUtils::extractIPPort(iface, ip, port);
 
 	std::cout << ip << " - - " << StringUtils::currentTime() 
-				<< " \"" << request.method() << " " << request.uri() << " " << request.version() << "\""
+				<< " \"" << request.method() << " " << request.uri().uri << " " << request.version() << "\""
 				<< " " << static_cast<int>(response.statusCode()) << " " << bytesSent
 				<< "\n";
 }

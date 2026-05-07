@@ -8,6 +8,7 @@
 #include <ctime>					// time_t
 #include <iostream>					// cerr, endl, streamsize
 #include <limits>					// numeric_limits
+#include <limits.h>					// PATH_MAX
 #include <stdexcept>				// runtime_error
 #include <algorithm>				// find
 #include <cstdlib>					// strtol

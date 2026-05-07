@@ -29,12 +29,20 @@ bool HttpRequest::parseRequestLine()
 		return false;
 
 	method_				= line.substr(0, firstSpace);
-	uri_				= StringUtils::normalizeSlashes(line.substr(firstSpace + 1, lastSpace - firstSpace - 1));
+
+	uri_.uri			= line.substr(firstSpace + 1, lastSpace - firstSpace - 1);
+	size_t queryDel		= uri_.uri.find('?');
+
+	uri_.hasQuery		= queryDel != std::string::npos;
+	uri_.path			= StringUtils::normalizeSlashes(uri_.uri.substr(0, queryDel));
+	uri_.query			= (uri_.hasQuery ? uri_.uri.substr(queryDel + 1) : "");
+
 	version_			= line.substr(lastSpace + 1);
 	connectionClose_	= (version_ != "HTTP/1.1");
 
 	bytesParsed_ = lineEnd + 2;
 	requestLineParsed_ = true;
+
 	return true;
 }
 
@@ -147,7 +155,7 @@ bool HttpRequest::hasCgi() const
 	if (!route || route->cgis().empty())
 		return false;
 
-	std::string path = uri_.substr(0, uri_.find('?'));
+	std::string path = uri_.path;
 
 	for (std::map<std::string, std::string>::const_iterator it = route->cgis().begin(); it != route->cgis().end(); ++it)
 	{
@@ -167,7 +175,7 @@ void HttpRequest::setMaxBodySize(size_t maxBodySize) { maxBodySize_ = maxBodySiz
 bool										HttpRequest::complete()			const { return complete_ || errorCode_ != 0; }
 bool										HttpRequest::headersComplete()	const { return headerParsed_; }
 const std::string							&HttpRequest::method()			const { return method_; }
-const std::string							&HttpRequest::uri()				const { return uri_; }
+const HttpRequest::URI						&HttpRequest::uri()				const { return uri_; }
 const std::string							&HttpRequest::version()			const { return version_; }
 const std::map<std::string, std::string>	&HttpRequest::headers()			const { return headers_; }
 const std::string							&HttpRequest::body()			const { return body_; }
@@ -176,3 +184,11 @@ const std::string							&HttpRequest::host()			const { return host_; }
 bool										HttpRequest::erroneous()		const { return errorCode_ != 0; }
 bool										HttpRequest::connectionClose()	const { return connectionClose_; }
 HttpStatus::Code							HttpRequest::errorCode()		const { return static_cast<Code>(errorCode_); }
+
+
+void HttpRequest::URI::clear(void) {
+	uri.clear();
+	path.clear();
+	query.clear();
+	hasQuery = false;
+}

@@ -68,7 +68,7 @@ void Config::parseLocationErrorPage(Route &route)
 	const std::string &code	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
 	const std::string page	= relativeToConfDir(tokenStream_.expect(TokenStream::Token::DirectiveWord));
 	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
-	
+
 	route.addErrorPage(code, page);
 }
 

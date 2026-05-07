@@ -13,27 +13,16 @@
 
 std::string CGIHandler::resolveScript(const HttpRequest &request, std::vector<std::string> &env, const Route &route)
 {
-	std::string uri = request.uri();
-	size_t qm_pos = uri.find('?');
-	std::string path_part;
-	std::string filename;
+	std::string path_part	= request.uri().path;
+	std::string query		= request.uri().query;
 
-	if (qm_pos != std::string::npos)
-	{
-		path_part = uri.substr(0, qm_pos);
-		env.push_back("QUERY_STRING=" + uri.substr(qm_pos + 1));
-	}
-	else
-	{
-		path_part = uri;
-		env.push_back("QUERY_STRING=");
-	}
-	std::string script_name = path_part;
-	size_t dot_pos = path_part.find('.');
+	env.push_back("QUERY_STRING=" + query);
+
+	std::string script_name	= path_part;
+	size_t		dot_pos		= path_part.find('.');
 	if (dot_pos != std::string::npos)
 	{
 		size_t path_info_slash = path_part.find('/', dot_pos);
-
 		if (path_info_slash != std::string::npos)
 		{
 			script_name = path_part.substr(0, path_info_slash);
@@ -42,17 +31,19 @@ std::string CGIHandler::resolveScript(const HttpRequest &request, std::vector<st
 			env.push_back("PATH_TRANSLATED=" + route.root() + path_info);
 		}
 	}
-	filename = route.root() + script_name;
+
+	std::string filename = route.root() + script_name;
 	env.push_back("SCRIPT_NAME=" + script_name);
 	env.push_back("SCRIPT_FILENAME=" + filename);
 	return filename;
 }
+
 std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const Interface &iface)
 {
 	std::vector<std::string> env;
 	env.push_back("REQUEST_METHOD=" + request.method());
 	env.push_back("SERVER_PROTOCOL=" + request.version());
-	std::string uri = request.uri();
+
 	const std::map<std::string, std::string> headers = request.headers();
 	std::map<std::string,std::string>::const_iterator i;
 	for(i = headers.begin(); i != headers.end(); i++)
@@ -70,7 +61,7 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 		else
 			env.push_back("HTTP_" + key + "=" + value);
 	}
-	env.push_back("SERVER_SOFTWARE="SERVER_SOFTWARE);
+	env.push_back("SERVER_SOFTWARE=" SERVER_SOFTWARE);
 	env.push_back("GATEWAY_INTERFACE=CGI/1.1");
 	env.push_back("REDIRECT_STATUS=200");
 	std::string ip, port, serverName;
@@ -84,7 +75,7 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 	env.push_back("SERVER_NAME=" + serverName);
 	env.push_back("REMOTE_ADDR=" + ip);
 	env.push_back("SERVER_PORT=" + port);
-	env.push_back("REQUEST_URI=" + request.uri());
+	env.push_back("REQUEST_URI=" + request.uri().uri);
 	return env;
 }
 
@@ -107,13 +98,13 @@ void CGIHandler::start(Client &client)
 
 	CGIProcess &cgi = *(client.cgi);
 	std::string filename;
-	
+
 	// Build the base environment
 	std::vector<std::string> environ = buildEnv(client.request, client.iface);
-	
+
 	// Resolve the script and finalize the environment BEFORE making pointers
 	filename = resolveScript(client.request, environ, *client.request.route);
-	
+
 	// Create a persistent local variable for the arguments so the strings don't get destroyed!
 	std::vector<std::string> args_str = buildArg(filename, *client.request.route);
 

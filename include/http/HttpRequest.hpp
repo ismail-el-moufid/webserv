@@ -27,6 +27,19 @@ class HttpRequest
 
 public:
 
+	class URI
+	{
+
+		public:
+
+			std::string	uri;
+			std::string	path;
+			std::string	query;
+			bool		hasQuery;
+
+			void clear(void);
+	};
+
 	HttpRequest();
 
 	void parse(const std::string &rawBytes);
@@ -38,7 +51,7 @@ public:
 	bool										complete() const;
 	bool										headersComplete() const;
 	const std::string							&method() const;
-	const std::string							&uri() const;
+	const URI									&uri() const;
 	const std::string							&version() const;
 	const std::map<std::string, std::string>	&headers() const;
 	const std::string							&host() const;
@@ -78,7 +91,7 @@ private:
 	// parsed data
 	std::string							rawBuffer_;
 	std::string							method_;
-	std::string							uri_;
+	URI									uri_;
 	std::string							version_;
 	std::map<std::string, std::string>	headers_;
 	std::string							host_;

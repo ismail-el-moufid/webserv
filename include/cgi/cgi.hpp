@@ -51,7 +51,7 @@ private:
 	CGIProcess &operator=(const CGIProcess &);
 
 	Client *client_;
-	
+
 };
 
 class CGIHandler
