@@ -89,38 +89,38 @@ void IOReactor::remove(IPollable &pollable)
 
 void IOReactor::waitAndDispatch(int timeToWaitInMS)
 {
-	if (pfds_.empty() || poll(&pfds_.at(0), pfds_.size(), timeToWaitInMS) <= 0)
-		return ;
-
-	ready_revents_.clear();
-	ready_fds_.clear();
-
-	// Snapshot fds that are ready
-	for (size_t i = 0; i < pfds_.size(); ++i)
+	if (!pfds_.empty() && poll(&pfds_.at(0), pfds_.size(), timeToWaitInMS) > 0)
 	{
-		if (pfds_.at(i).revents != 0)
+		ready_revents_.clear();
+		ready_fds_.clear();
+
+		// Snapshot fds that are ready
+		for (size_t i = 0; i < pfds_.size(); ++i)
 		{
-			ready_revents_.push_back(pfds_.at(i).revents);
-			ready_fds_.push_back(pfds_.at(i).fd);
+			if (pfds_.at(i).revents != 0)
+			{
+				ready_revents_.push_back(pfds_.at(i).revents);
+				ready_fds_.push_back(pfds_.at(i).fd);
+			}
 		}
-	}
 
-	// Dispatch events for ready fds
-	for (size_t i = 0; i < ready_fds_.size(); ++i)
-	{
-		if (!REGISTERED(ready_fds_.at(i)))
-			continue;
-		
-		IPollable *pol = pollables_.at(fd_to_index_.at(ready_fds_.at(i)));
-		
-		if (ready_revents_.at(i) & POLLIN)
-			pol->onRead();
-		
-		// Re-check registration as onRead() might have deleted the object
-		if (REGISTERED(ready_fds_.at(i)) && pollables_.at(fd_to_index_.at(ready_fds_.at(i))) == pol)
+		// Dispatch events for ready fds
+		for (size_t i = 0; i < ready_fds_.size(); ++i)
 		{
-			if (ready_revents_.at(i) & POLLOUT)
-				pol->onWrite();
+			if (!REGISTERED(ready_fds_.at(i)))
+				continue;
+			
+			IPollable *pol = pollables_.at(fd_to_index_.at(ready_fds_.at(i)));
+			
+			if (ready_revents_.at(i) & POLLIN)
+				pol->onRead();
+			
+			// Re-check registration as onRead() might have deleted the object
+			if (REGISTERED(ready_fds_.at(i)) && pollables_.at(fd_to_index_.at(ready_fds_.at(i))) == pol)
+			{
+				if (ready_revents_.at(i) & POLLOUT)
+					pol->onWrite();
+			}
 		}
 	}
 

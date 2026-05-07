@@ -183,7 +183,7 @@ void CGIHandler::killProcess(Client &client)
 
 	kill(cgi.pid_, SIGKILL);
 	waitpid(cgi.pid_, &status, 0);
-	client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
+	client.response = HttpPipeline::errorResponse(client.request, HttpStatus::GatewayTimeout);
 }
 
 
