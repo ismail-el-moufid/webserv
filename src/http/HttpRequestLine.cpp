@@ -96,19 +96,11 @@ int validateVersion(const std::string &version, bool endFound)
 
 // Request line
 
-static bool locateSpaces(const std::string &line, size_t &firstSpace, size_t &lastSpace, size_t &spaceCount, bool endFound)
+static bool locateSpaces(const std::string &line, size_t &firstSpace, size_t &lastSpace, size_t &spaceCount)
 {
 	spaceCount = std::count(line.begin(), line.end(), ' ');
 	if (spaceCount == 0)
-	{
-		// force fall-through for proper error code instead of generic BadRequest
-		if (endFound || line.size() > MAX_REQUEST_LINE_SIZE)
-		{
-			firstSpace = lastSpace = line.size();
-			return true;
-		}
 		return false;
-	}
 	firstSpace	= line.find(' ');
 	lastSpace	= line.rfind(' ');
 	return true;
@@ -126,7 +118,7 @@ int validateRequestLine(const std::string &line, size_t &firstSpace, size_t &las
 		return BadRequest;
 
 	size_t spaceCount;
-	if (!locateSpaces(line, firstSpace, lastSpace, spaceCount, endFound))
+	if (!locateSpaces(line, firstSpace, lastSpace, spaceCount))
 		return endFound ? BadRequest : NEED_MORE_DATA;
 	if (spaceCount > 2)
 		return BadRequest;
