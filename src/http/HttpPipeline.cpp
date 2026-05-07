@@ -136,6 +136,8 @@ HttpResponse staticResponse(const HttpRequest &request)
 
 	if (S_ISDIR(st.st_mode))
 	{
+		if (request.uri().back() != '/')
+			return HttpResponse::HttpResponseRedirect(HttpStatus::MovedPermanently, request.uri() + "/");
 		std::string index;
 
 		if (resolveIndex(route, filePath, index))
