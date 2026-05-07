@@ -66,7 +66,7 @@ void Client::onRead()
 			response = HttpPipeline::errorResponse(request, HttpStatus::MethodNotAllowed);
 			writeBuffer = response.serialize();
 			HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
-			reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+			reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
 			return ;
 		}
 
@@ -79,7 +79,7 @@ void Client::onRead()
 				response = HttpResponse::HttpErrorResponse(HttpStatus::InternalServerError);
 				writeBuffer = response.serialize();
 				HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
-				reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+				reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
 				return ;
 			}
 			reactor_.add(*cgi, CGI_IO);
@@ -90,7 +90,7 @@ void Client::onRead()
 			response = HttpPipeline::buildResponse(request);
 			writeBuffer = response.serialize();
 			HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
-			reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+			reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
 		}
 	}
 	catch (const std::exception &e)
@@ -99,7 +99,7 @@ void Client::onRead()
 		response = HttpResponse::HttpErrorResponse(HttpStatus::InternalServerError);
 		writeBuffer = response.serialize();
 		HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
-		reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+		reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
 	}
 }
 
