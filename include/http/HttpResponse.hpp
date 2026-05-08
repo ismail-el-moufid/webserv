@@ -45,6 +45,7 @@ class HttpResponse
 
 		static HttpResponse HttpErrorResponse(HttpStatus::Code status);
 		static HttpResponse HttpResponseRedirect(HttpStatus::Code status, const std::string &location);
+		static HttpResponse HttpResponseBuilder(HttpStatus::Code status, const std::string &body, const std::string &contentType);
 
 	private:
 

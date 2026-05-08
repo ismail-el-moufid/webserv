@@ -9,6 +9,8 @@
 #include <sys/stat.h>			// stat, S_ISDIR
 #include <iostream>				// cout, ios, left
 #include <cstdlib>				// strtol
+#include <unistd.h>
+
 
 namespace
 {
@@ -179,6 +181,119 @@ void resolve(HttpRequest &request, const ListenEndpoints &endpoints, const Inter
 	request.route = resolveRoute(*request.vhost, request.uri().path);
 }
 
+HttpResponse handlePostRequest(const HttpRequest &request)
+{
+    if (request.route->upload().empty())
+    {
+        return errorResponse(request, HttpStatus::NotImplemented);
+    }
+
+    mkdir(request.route->upload().c_str(), 0755);
+	
+	if (access(request.route->upload().c_str(), W_OK) != 0)
+	{
+    	return errorResponse(request, HttpStatus::InternalServerError);
+	}
+    std::map<std::string, std::string>::const_iterator ct = request.headers().find("content-type");
+    if (ct == request.headers().end())
+    {
+        return errorResponse(request, HttpStatus::BadRequest);
+    }
+
+    size_t bp = ct->second.find("boundary=");
+    if (bp == std::string::npos)
+    {
+        std::ostringstream ts;
+        ts << "upload_" << std::time(NULL);
+        std::ofstream ofs((request.route->upload() + "/" + ts.str()).c_str(), std::ios::binary);
+        if (ofs) ofs << request.body();
+        HttpResponse res = HttpResponse::HttpResponseBuilder(ofs ? HttpStatus::Created : HttpStatus::InternalServerError,
+            "{\"file\":\"" + ts.str() + "\"}", "application/json");
+        return res;
+    }
+
+    // Extract boundary value and may be quoted
+    std::string bval = ct->second.substr(bp + 9);
+    size_t semi = bval.find(';');
+    if (semi != std::string::npos)
+        bval = bval.substr(0, semi);
+    if (bval.size() >= 2 && bval[0] == '"' && bval[bval.size() - 1] == '"')
+        bval = bval.substr(1, bval.size() - 2);
+
+    // RFC 2046: delimiter is CRLF + "--" + boundary value
+    // Prepend CRLF to body so first delimiter matches the same pattern
+    std::string delim = "\r\n--" + bval;
+    std::string body = "\r\n" + request.body();
+
+    int saved = 0;
+    std::string lastName;
+    size_t pos = body.find(delim);
+
+    while (pos != std::string::npos)
+    {
+        pos += delim.size();
+        if (pos + 1 < body.size() && body[pos] == '-' && body[pos + 1] == '-')
+            break;
+        if (pos + 1 < body.size() && body[pos] == '\r' && body[pos + 1] == '\n')
+            pos += 2;
+
+        size_t headEnd = body.find("\r\n\r\n", pos);
+        if (headEnd == std::string::npos)
+            break;
+
+        size_t dataStart = headEnd + 4;
+        size_t dataEnd = body.find(delim, dataStart);
+        if (dataEnd == std::string::npos)
+            break;
+
+        // Parse this part's Content-Disposition for filename
+        std::string head = body.substr(pos, headEnd - pos);
+        size_t fn = head.find("filename=\"");
+        if (fn == std::string::npos)
+        {
+            pos = dataEnd;
+            continue;
+        }
+
+        fn += 10;
+        size_t fnEnd = head.find('"', fn);
+        if (fnEnd == std::string::npos)
+        {
+            pos = dataEnd;
+            continue;
+        }
+
+        std::string name = head.substr(fn, fnEnd - fn);
+        size_t slash = name.find_last_of("/\\");
+        if (slash != std::string::npos)
+            name = name.substr(slash + 1);
+        if (name.empty())
+        {
+            pos = dataEnd;
+            continue;
+        }
+
+        std::ofstream ofs((request.route->upload() + "/" + name).c_str(), std::ios::binary);
+        if (ofs)
+        {
+            ofs.write(body.c_str() + dataStart, dataEnd - dataStart);
+            ++saved;
+            lastName = name;
+        }
+        pos = dataEnd;
+    }
+
+    if (saved == 0)
+    {
+		return errorResponse(request, HttpStatus::BadRequest);
+    }
+
+    std::ostringstream json;
+    json << "{\"files\":" << saved << ",\"last\":\"" << lastName << "\"}";
+    HttpResponse res = HttpResponse::HttpResponseBuilder(HttpStatus::Created, json.str(), "application/json");
+    return res;
+}
+
 HttpResponse buildResponse(const HttpRequest &request)
 {
 	if (request.erroneous())
@@ -200,8 +315,8 @@ HttpResponse buildResponse(const HttpRequest &request)
 		return errorResponse(request, HttpStatus::InternalServerError);
 
 	// Upload — TODO
-	if (!route.upload().empty() && (request.method() == "POST" || request.method() == "PUT"))
-		return errorResponse(request, HttpStatus::NotImplemented);
+	if (request.method() == "POST" || request.method() == "PUT")
+		return handlePostRequest(request);
 
 	// Static
 	return staticResponse(request);

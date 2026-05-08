@@ -65,6 +65,15 @@ HttpResponse HttpResponse::HttpResponseRedirect(HttpStatus::Code status, const s
 	return res;
 }
 
+HttpResponse HttpResponse::HttpResponseBuilder(HttpStatus::Code code, const std::string &body, const std::string &contentType)
+{
+	HttpResponse res;
+	res.setStatus(code);
+	res.setContentType(contentType);
+	res.setBody(body);
+	return res;
+}
+
 void HttpResponse::reset(void)
 {
 	status_ = HttpStatus::OK;

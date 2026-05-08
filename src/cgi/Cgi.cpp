@@ -1,4 +1,4 @@
-#include "cgi/Cgi.hpp"
+#include "cgi/cgi.hpp"
 #include "core/Client.hpp"
 #include "core/IOReactor.hpp"
 #include "http/HttpPipeline.hpp"

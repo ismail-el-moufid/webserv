@@ -6,7 +6,7 @@
 #include "utils/NetworkUtils.hpp"	// Interface
 #include "http/HttpRequest.hpp"		// HttpRequest
 #include "http/HttpResponse.hpp"	// HttpResponse
-#include "cgi/Cgi.hpp"				// CGIProcess
+#include "cgi/cgi.hpp"				// CGIProcess
 
 
 

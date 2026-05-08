@@ -1,6 +1,6 @@
 #include "core/Client.hpp"
 #include "core/IOReactor.hpp"
-#include "cgi/Cgi.hpp"
+#include "cgi/cgi.hpp"
 #include "http/HttpPipeline.hpp"
 #include "utils/StringUtils.hpp"
 
