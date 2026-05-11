@@ -10,7 +10,7 @@
 #include <sys/stat.h>			// stat, S_ISDIR
 #include <iostream>				// cout, ios, left
 #include <cstdlib>				// strtol
-#include <unistd.h>				// stat
+#include <sys/stat.h>			// S_ISDIR, stat
 
 namespace
 {
@@ -27,7 +27,7 @@ const VirtualHost *resolveVhost(const std::vector<VirtualHost *> &candidates, co
 const Route *resolveRoute(const VirtualHost &vhost, const std::string &uri)
 {
 	const Route *best	= NULL;
-	size_t		bestLen = 0;
+	size_t		bestLen	= 0;
 
 	const std::vector<Route> &routes = vhost.routes();
 	for (size_t i = 0; i < routes.size(); ++i)
@@ -64,11 +64,13 @@ HttpResponse dirListing(const HttpRequest &request, const std::string &path)
 	while ((entry = readdir(dir)) != NULL)
 	{
 		std::string name(entry->d_name);
-		if (name == "." || name == "..") continue;
+		if (name == "." || name == "..")
+			continue;
 		struct stat st;
-		if (stat((path + "/" + name).c_str(), &st) != 0) continue;
-		bool isDir = S_ISDIR(st.st_mode);
-		std::string display = name + (isDir ? "/" : "");
+		if (stat((path + "/" + name).c_str(), &st) != 0)
+			continue;
+		bool		isDir	= S_ISDIR(st.st_mode);
+		std::string	display	= name + (isDir ? "/" : "");
 		char t[32];
 		strftime(t, sizeof(t), "%d-%b-%Y %H:%M", localtime(&st.st_mtime));
 		body	<< "<a href=\"" << display << "\">"
@@ -101,8 +103,8 @@ HttpResponse serveFile(const HttpRequest &request, const std::string &filePath)
 
 HttpResponse staticResponse(const HttpRequest &request)
 {
-	const Route &route = *request.route;
-	std::string root = route.root();
+	const Route &route	= *request.route;
+	std::string root	= route.root();
 	if (!root.empty() && root[root.size() - 1] == '/')
 		root.erase(root.size() - 1);
 	std::string filePath = root + request.uri().path;
@@ -148,11 +150,6 @@ void resolve(HttpRequest &request, const ListenEndpoints &endpoints, const Inter
 	request.route = resolveRoute(*request.vhost, request.uri().path);
 }
 
-HttpResponse handlePostRequest(const HttpRequest &)
-{
-	return HttpResponse::HttpResponseBuilder(HttpStatus::Created, "{\"status\":\"ok\"}", "application/json");
-}
-
 HttpResponse buildResponse(const HttpRequest &request)
 {
 	if (request.erroneous())
@@ -171,7 +168,7 @@ HttpResponse buildResponse(const HttpRequest &request)
 		return errorResponse(request, HttpStatus::InternalServerError);
 
 	if (!request.route->upload().empty() && (request.method() == "POST" || request.method() == "PUT"))
-		return handlePostRequest(request);
+		return HttpResponse::HttpResponseBuilder(HttpStatus::Created, "{\"status\":\"ok\"}", "application/json");
 
 	if (request.method() == "GET")
 		return staticResponse(request);

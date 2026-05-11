@@ -17,10 +17,9 @@ void Pipe::closeWrite()
 		close(writeFd_);
 	writeFd_ = -1;
 }
-#include <iostream>
+
 Pipe::Pipe() : readFd_(-1), writeFd_(-1)
 {
-	std::cout << StringUtils::currentTime() << " [info] Creating pipe\n";
 	int fds[2];
 	if (pipe(fds) == -1)
 		throw std::runtime_error(StringUtils::currentTime() + " [error] Failed to create pipe");

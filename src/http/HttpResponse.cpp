@@ -12,7 +12,7 @@ void HttpResponse::init()
 	headers_["Content-Length"]	= "0";
 }
 
-HttpResponse::HttpResponse(void): status_(HttpStatus::OK)
+HttpResponse::HttpResponse(): status_(HttpStatus::OK)
 {
 	init();
 }
@@ -27,7 +27,7 @@ bool				HttpResponse::hasFile()												const	{ return !filePath_.empty(); }
 
 const std::string	&HttpResponse::filePath()											const	{ return filePath_; }
 
-std::string HttpResponse::serialize(void) const
+std::string HttpResponse::serialize() const
 {
 	std::ostringstream ores;
 
@@ -59,14 +59,12 @@ HttpResponse HttpResponse::HttpErrorResponse(HttpStatus::Code status)
 
 HttpResponse HttpResponse::HttpResponseRedirect(HttpStatus::Code status, const std::string &location)
 {
-	std::ostringstream body;
-	body << "<!doctype html><html lang=\"en-us\"><head><title>Redirect</title></head><body>redirecting to <a href=\"" << location << "\"></a></body></html>";
-
 	HttpResponse res;
 	res.setStatus(status);
 	res.setHeader("Location", location);
 	res.setContentType("text/html");
-	res.setBody(body.str());
+	res.setBody("<!doctype html><html lang=\"en-us\"><head><title>Redirect</title></head>"
+		"<body>redirecting to <a href=\"" + location + "\">" + location + "</a></body></html>");
 	return res;
 }
 
@@ -79,7 +77,7 @@ HttpResponse HttpResponse::HttpResponseBuilder(HttpStatus::Code code, const std:
 	return res;
 }
 
-void HttpResponse::reset(void)
+void HttpResponse::reset()
 {
 	status_ = HttpStatus::OK;
 	headers_.clear();

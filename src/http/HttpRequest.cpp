@@ -18,9 +18,9 @@ bool HttpRequest::parseRequestLine()
 
 	std::string line;
 
-	size_t firstSpace = 0, lastSpace = 0;
+	size_t firstSpace	= 0, lastSpace = 0;
 
-	size_t lineEnd = rawBuffer_.find("\r\n");
+	size_t lineEnd		= rawBuffer_.find("\r\n");
 	if (lineEnd == std::string::npos)
 		return errorCode_ = validateRequestLine(rawBuffer_, firstSpace, lastSpace, false), false;
 
@@ -41,8 +41,8 @@ bool HttpRequest::parseRequestLine()
 	version_			= line.substr(lastSpace + 1);
 	connectionClose_	= (version_ != "HTTP/1.1");
 
-	bytesParsed_ = lineEnd + 2;
-	requestLineParsed_ = true;
+	bytesParsed_		= lineEnd + 2;
+	requestLineParsed_	= true;
 
 	return true;
 }
@@ -94,7 +94,8 @@ void HttpRequest::parseBody()
 			parseChunkedBody(rawBuffer_, bytesParsed_, body_, complete_, errorCode_, maxBodySize_);
 		contentLength_ = body_.size();
 	}
-	parseFixedBody(rawBuffer_, bytesParsed_, body_, complete_, contentLength_);
+	else
+		parseFixedBody(rawBuffer_, bytesParsed_, body_, complete_, contentLength_);
 }
 
 void HttpRequest::parse(const std::string &rawBytes)
@@ -118,7 +119,7 @@ void HttpRequest::initBody(int fd)														{ body_.init(fd); }
 void HttpRequest::initBody(const std::string &uploadDir)								{ body_.init(uploadDir); }
 void HttpRequest::initBody(const std::string &uploadDir, const std::string &boundary)	{ body_.init(uploadDir, boundary); }
 
-void HttpRequest::URI::clear(void)
+void HttpRequest::URI::clear()
 {
 	uri.clear();
 	path.clear();
@@ -143,8 +144,8 @@ void HttpRequest::reset()
 	uri_.clear();
 	version_.clear();
 	headers_.clear();
+	host_.clear();
 	body_.reset();
-
 	if (bytesParsed_ > 0)
 	{
 		if (bytesParsed_ < rawBuffer_.size())
@@ -164,8 +165,8 @@ bool HttpRequest::hasCgi() const
 
 	for (std::map<std::string, std::string>::const_iterator it = route->cgis().begin(); it != route->cgis().end(); ++it)
 	{
-		const std::string& ext = it->first;
-		size_t ext_pos = path.find(ext);
+		const std::string&	ext		= it->first;
+		size_t				ext_pos	= path.find(ext);
 		if (ext_pos != std::string::npos && (ext_pos + ext.length() == path.length() || path[ext_pos + ext.length()] == '/'))
 			return true;
 	}

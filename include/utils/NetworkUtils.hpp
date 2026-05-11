@@ -1,16 +1,13 @@
 #pragma once
 
 #include <string>					// string
-#include <netdb.h>					// addrinfo
+#include <netdb.h>					// sa_family_t, sockaddr_storage, socklen_t
 
 typedef struct { sa_family_t family; sockaddr_storage addr; socklen_t addrlen; } Interface;
 
 namespace NetworkUtils
 {
 	bool resolve(const std::string &address, const std::string &port, Interface &result);
-	bool resolve(const std::string &address, const std::string &port, struct addrinfo *&results);
-	bool resolve(const std::string &address, const std::string &port);
-	bool resolve(const std::string &address_port);
 
 	void extractIPPort(const Interface &iface, std::string &ip, std::string &port);
 

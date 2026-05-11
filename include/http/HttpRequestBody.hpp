@@ -33,7 +33,6 @@ private:
 
 	// pipe case
 	std::string	data_;
-	size_t		offset_;
 
 	// file/multipart case
 	std::ofstream	*file_;

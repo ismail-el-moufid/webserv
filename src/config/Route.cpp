@@ -22,8 +22,8 @@ void Route::setMaxBodySize(const std::string &maxBodySize)
 		throw std::runtime_error(StringUtils::currentTime() + " [error] clientMaxBodySize must be a number");
 	maxBodySize_ = strtoul(maxBodySize.c_str(), NULL, 10);
 }
-void	Route::setPath(const std::string &path)	{ path_ = StringUtils::normalizeSlashes(path); }
-void	Route::setRoot(const std::string &root)	{ (root_ = StringUtils::normalizeSlashes(root)).erase(root_.find_last_not_of('/') + 1); }
+void	Route::setPath(const std::string &path)	{ path_		= StringUtils::normalizeSlashes(path); }
+void	Route::setRoot(const std::string &root)	{ (root_	= StringUtils::normalizeSlashes(root)).erase(root_.find_last_not_of('/') + 1); }
 
 void Route::addErrorPage(const std::string &code, const std::string &page)
 {
@@ -41,6 +41,7 @@ void Route::addMethod(const std::string &method)
 
 void Route::setRedirect(const std::string &code, const std::string &page)
 {
+	// multiple redirect directives silently overwrite each other, but redirect can't be combined with cgi or upload
 	if (!cgis_.empty())
 		throw std::runtime_error(StringUtils::currentTime() + " [error] redirect and cgi are mutually exclusive and can't exist on the same location block");
 	if (!upload_.empty())
@@ -82,7 +83,7 @@ void	Route::clearAllowedMethods() { allowedMethods_.clear(); }
 
 const std::string								&Route::path()					const { return path_; }
 size_t											Route::maxBodySize()			const { return maxBodySize_; }
-const std::vector<std::string>					&Route::allowedMethods()	const { return allowedMethods_; };
+const std::vector<std::string>					&Route::allowedMethods()		const { return allowedMethods_; }
 const std::string								&Route::root()					const { return root_; }
 bool											Route::redirected()				const { return redirect_; }
 const std::string								&Route::redirectPage()			const { return redirectPage_; }

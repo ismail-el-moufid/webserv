@@ -1,14 +1,11 @@
 #include "http/HttpRequestBody.hpp"
-#include "Defaults.hpp"
 
 #include <unistd.h>
 #include <ctime>
 #include <sstream>
 #include <sys/stat.h>
 
-static char g_ofstreamBuf[CLIENT_RCVBUF_SIZE];
-
-HttpRequestBody::HttpRequestBody() : offset_(0), file_(NULL), uploadState_(INACTIVE), size_(0), fd_(-1) {}
+HttpRequestBody::HttpRequestBody() : file_(NULL), uploadState_(INACTIVE), size_(0), fd_(-1) {}
 
 HttpRequestBody::~HttpRequestBody() { delete file_; }
 
@@ -33,7 +30,6 @@ void HttpRequestBody::init(const std::string &uploadDir)
 	std::ostringstream path;
 	path << uploadDir << "/upload_" << std::time(NULL);
 	file_ = new std::ofstream(path.str().c_str(), std::ios::binary);
-	file_->rdbuf()->pubsetbuf(g_ofstreamBuf, sizeof(g_ofstreamBuf));
 }
 
 // Extract filename from part headers, sanitize, return empty on failure
@@ -65,9 +61,8 @@ void HttpRequestBody::openFile(const std::string &partHeaders)
 		ts << "upload_" << std::time(NULL);
 		name = ts.str();
 	}
-	std::string path = uploadDir_ + "/" + name;
-	file_ = new std::ofstream(path.c_str(), std::ios::binary);
-	file_->rdbuf()->pubsetbuf(g_ofstreamBuf, sizeof(g_ofstreamBuf));
+	std::string path	= uploadDir_ + "/" + name;
+	file_				= new std::ofstream(path.c_str(), std::ios::binary);
 }
 
 void HttpRequestBody::processMultipart(const std::string &chunk)
@@ -96,10 +91,10 @@ void HttpRequestBody::processMultipart(const std::string &chunk)
 
 		if (uploadState_ == STREAMING)
 		{
-			std::string delim = "\r\n--" + boundary_;
+			std::string delim	= "\r\n--" + boundary_;
 
 			// check if delimiter is present in buffer
-			size_t delimPos = headerBuf_.find(delim);
+			size_t delimPos		= headerBuf_.find(delim);
 			if (delimPos != std::string::npos)
 			{
 				// write everything before the delimiter
@@ -152,7 +147,7 @@ HttpRequestBody &HttpRequestBody::operator+=(const std::string &chunk)
 
 	if (uploadState_ != INACTIVE)
 	{
-		if (!boundary_.empty() || uploadState_ == WAITING_PART_HEADERS)
+		if (!boundary_.empty())
 			processMultipart(chunk);
 		else if (file_) // raw upload
 			file_->write(chunk.c_str(), chunk.size());
@@ -173,7 +168,6 @@ void HttpRequestBody::reset()
 	boundary_.clear();
 	uploadDir_.clear();
 
-	offset_			= 0;
 	size_			= 0;
 	fd_				= -1;
 
@@ -183,4 +177,4 @@ void HttpRequestBody::reset()
 }
 
 size_t	HttpRequestBody::size()		const { return size_; }
-bool	HttpRequestBody::empty()	const { return offset_ >= data_.size(); }
+bool	HttpRequestBody::empty()	const { return data_.empty(); }

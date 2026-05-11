@@ -37,8 +37,11 @@ public:
 			Token(const std::string &content);
 			Token(Type type);
 
+			std::string	errorLocation(const std::string &filePath) const;
+
 			std::string	content;
 			Type		type;
+
 			size_t		line;
 			size_t		column;
 		};

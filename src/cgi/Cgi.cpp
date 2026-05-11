@@ -25,8 +25,8 @@ std::string CGIHandler::resolveScript(const HttpRequest &request, std::vector<st
 		size_t path_info_slash = path_part.find('/', dot_pos);
 		if (path_info_slash != std::string::npos)
 		{
-			script_name = path_part.substr(0, path_info_slash);
-			std::string path_info = path_part.substr(path_info_slash);
+			script_name				= path_part.substr(0, path_info_slash);
+			std::string path_info	= path_part.substr(path_info_slash);
 			env.push_back("PATH_INFO=" + path_info);
 			env.push_back("PATH_TRANSLATED=" + route.root() + path_info);
 		}
@@ -44,12 +44,13 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 	env.push_back("REQUEST_METHOD=" + request.method());
 	env.push_back("SERVER_PROTOCOL=" + request.version());
 
-	const std::map<std::string, std::string> headers = request.headers();
+	const std::map<std::string, std::string> &headers = request.headers();
 	std::map<std::string,std::string>::const_iterator i;
 	for(i = headers.begin(); i != headers.end(); i++)
 	{
-		std::string key = i->first;
-		std::string value = i->second;
+		std::string	key		= i->first;
+		std::string	value	= i->second;
+
 		for(size_t idx = 0; idx < key.length(); idx++)
 		{
 			key[idx] = std::toupper(key[idx]);
@@ -64,6 +65,7 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 	env.push_back("SERVER_SOFTWARE=" SERVER_SOFTWARE);
 	env.push_back("GATEWAY_INTERFACE=CGI/1.1");
 	env.push_back("REDIRECT_STATUS=200");
+
 	std::string ip, port, serverName;
 	NetworkUtils::extractIPPort(iface, ip, port);
 	if (!request.host().empty())
@@ -72,18 +74,20 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 		serverName = request.vhost->names().front();
 	else
 		serverName = ip;
+
 	env.push_back("SERVER_NAME=" + serverName);
 	env.push_back("REMOTE_ADDR=" + ip);
 	env.push_back("SERVER_PORT=" + port);
 	env.push_back("REQUEST_URI=" + request.uri().uri);
+
 	return env;
 }
 
 std::vector<std::string> CGIHandler::buildArg(const std::string &filename, const Route &route)
 {
-	size_t dot_pos = filename.rfind('.');
-	std::vector<std::string> arg;
-	std::string extention = filename.substr(dot_pos);
+	size_t						dot_pos		= filename.rfind('.');
+	std::vector<std::string>	arg;
+	std::string					extention	= filename.substr(dot_pos);
 	std::map<std::string, std::string>::const_iterator it = route.cgis().find(extention);
 	arg.push_back(it->second);
 	arg.push_back(filename);
@@ -92,12 +96,12 @@ std::vector<std::string> CGIHandler::buildArg(const std::string &filename, const
 
 void CGIHandler::start(Client &client)
 {
-	char **argumnets;
+	char **arguments;
 	char **envm;
 	pid_t pid;
 
-	CGIProcess &cgi = *(client.cgi);
-	std::string filename;
+	CGIProcess	&cgi = *(client.cgi);
+	std::string	filename;
 
 	// Build the base environment
 	std::vector<std::string> environ = buildEnv(client.request, client.iface);
@@ -112,8 +116,8 @@ void CGIHandler::start(Client &client)
 	std::vector<const char *> env = StringUtils::toNullTerminatedCStrings(environ);
 	std::vector<const char *> arg = StringUtils::toNullTerminatedCStrings(args_str);
 
-	argumnets = const_cast<char**>(&arg[0]);
-	envm = const_cast<char**>(&env[0]);
+	arguments	= const_cast<char**>(&arg[0]);
+	envm		= const_cast<char**>(&env[0]);
 
 	// Check if script exists before forking
 	if (access(filename.c_str(), F_OK) == -1)
@@ -136,9 +140,8 @@ void CGIHandler::start(Client &client)
 		dup2(cgi.stdoutPipe.writeFd(), STDOUT_FILENO);
 		// clear the O_NONBLOCK the pipe inherited
 		fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) & ~O_NONBLOCK);
-		execve(argumnets[0], argumnets, envm);
+		execve(arguments[0], arguments, envm);
 		exit(1);
-		break ;
 	default:
 		// Parent Process
 		cgi.stdinPipe.closeRead();
@@ -177,9 +180,9 @@ void CGIHandler::killProcess(Client &client)
 
 bool CGIHandler::writeStdin(Client &client)
 {
-	CGIProcess &cgi = *client.cgi;
+	CGIProcess	&cgi		= *client.cgi;
 
-	size_t remaining = cgi.pendingBody.size() - cgi.bodyOffset;
+	size_t		remaining	= cgi.pendingBody.size() - cgi.bodyOffset;
 
 	if (remaining == 0)
 		return client.request.complete();
@@ -211,9 +214,7 @@ bool CGIHandler::readStdout(Client &client)
 	if(bytes > 0)
 		cgi.outputBuffer.append(buffer, bytes);
 	else if(bytes == 0)
-	{
 		return true;
-	}
 	else if (bytes == -1)
 		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
 

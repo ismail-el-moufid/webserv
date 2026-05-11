@@ -3,7 +3,7 @@
 #include "utils/StringUtils.hpp"	// toLower, trim, hasInvalidChar
 #include "Defaults.hpp"				// MAX_HEADER_SIZE
 
-#include <cstdlib>					// size_t, strtoul
+#include <cstdlib>					// strtoul
 #include <string>					// string
 
 using namespace HttpStatus;
@@ -40,8 +40,8 @@ static bool isChunkedEncoding(const std::string &transferEncoding)
 	size_t pos = 0;
 	while (true)
 	{
-		size_t comma = transferEncoding.find(',', pos);
-		std::string token = trim(transferEncoding.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos));
+		size_t		comma	= transferEncoding.find(',', pos);
+		std::string	token	= trim(transferEncoding.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos));
 		if (!token.empty())
 			last = token;
 		if (comma == std::string::npos)
@@ -94,8 +94,8 @@ static int parseHeaderField(const std::string &line, bool &seenContentLength, si
 		size_t pos = 0;
 		while (pos < value.size())
 		{
-			size_t comma = value.find(',', pos);
-			std::string token = toLower(trim(value.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos)));
+			size_t		comma = value.find(',', pos);
+			std::string	token = toLower(trim(value.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos)));
 			if (token == "close")
 			{
 				connectionClose = true;
@@ -125,7 +125,7 @@ static int parseHeaderField(const std::string &line, bool &seenContentLength, si
 	return VALID;
 }
 
-static int resolveBodyEncoding(const std::string &version, bool chunked, const std::map<std::string, std::string> &parsed)
+static int validateBodyEncoding(const std::string &version, bool chunked, const std::map<std::string, std::string> &parsed)
 {
 	if (chunked && version == "HTTP/1.0")
 		return BadRequest;
@@ -142,12 +142,12 @@ int validateHeaders(const std::string &rawHeaderFields, bool complete, const std
 	if (!complete)
 		return NEED_MORE_DATA;
 
-	bool	seenContentLength = false;
-	size_t	pos = 0;
+	bool	seenContentLength	= false;
+	size_t	pos					= 0;
 	while (pos < rawHeaderFields.size())
 	{
-		size_t lineEnd = rawHeaderFields.find("\r\n", pos);
-		std::string line = (lineEnd == std::string::npos)
+		size_t		lineEnd	= rawHeaderFields.find("\r\n", pos);
+		std::string	line	= (lineEnd == std::string::npos)
 			? rawHeaderFields.substr(pos)
 			: rawHeaderFields.substr(pos, lineEnd - pos);
 
@@ -159,5 +159,5 @@ int validateHeaders(const std::string &rawHeaderFields, bool complete, const std
 		pos = lineEnd + 2;
 	}
 
-	return resolveBodyEncoding(version, chunked, parsed);
+	return validateBodyEncoding(version, chunked, parsed);
 }

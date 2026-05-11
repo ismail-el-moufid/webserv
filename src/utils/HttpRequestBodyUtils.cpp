@@ -13,20 +13,16 @@ static bool parseChunkSize(std::string &rawBuffer, size_t &bytesParsed, int &err
 	if (lineEnd == std::string::npos)
 		return false;
 
-	std::string sizeStr = rawBuffer.substr(bytesParsed, lineEnd - bytesParsed);
+	std::string sizeStr	= rawBuffer.substr(bytesParsed, lineEnd - bytesParsed);
 
-	size_t extPos = sizeStr.find(';');
+	size_t extPos		= sizeStr.find(';');
 	if (extPos != std::string::npos)
 		sizeStr = sizeStr.substr(0, extPos);
 
 	if (sizeStr.empty() || sizeStr.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos)
 		return (errorCode = BadRequest, false);
 
-	char *end;
-	chunkSize = std::strtoul(sizeStr.c_str(), &end, 16);
-	if (*end != '\0')
-		return (errorCode = BadRequest, false);
-
+	chunkSize = std::strtoul(sizeStr.c_str(), NULL, 16);
 	bytesParsed = lineEnd + 2;
 	return true;
 }
@@ -56,8 +52,8 @@ void parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBo
 
 	if (chunkSize == 0)
 	{
-		bytesParsed = localParsed;
-		complete = true;
+		bytesParsed	= localParsed;
+		complete	= true;
 		return ;
 	}
 

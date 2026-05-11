@@ -25,7 +25,7 @@ public:
 			std::string	query;
 			bool		hasQuery;
 
-			void clear(void);
+			void clear();
 	};
 
 	HttpRequest();

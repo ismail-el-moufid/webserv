@@ -4,7 +4,6 @@
 #include "Defaults.hpp"				// MAX_REQUEST_LINE_SIZE
 
 #include <string>					// string
-#include <algorithm>				// count
 
 using namespace HttpStatus;
 using namespace StringUtils;
@@ -60,7 +59,7 @@ static bool isKnownVersion(const std::string &version)
 
 static bool hasFullHttpPrefix(const std::string &version)
 {
-	return version.size() >= 5 && version.substr(0, 5) == "HTTP/";
+	return version.size() >= 5 && version.compare(0, 5, "HTTP/") == 0;
 }
 
 static bool isIncompleteHttpPrefix(const std::string &version)
@@ -98,12 +97,21 @@ int validateVersion(const std::string &version, bool endFound)
 
 static bool locateSpaces(const std::string &line, size_t &firstSpace, size_t &lastSpace, size_t &spaceCount)
 {
-	spaceCount = std::count(line.begin(), line.end(), ' ');
-	if (spaceCount == 0)
-		return false;
-	firstSpace	= line.find(' ');
-	lastSpace	= line.rfind(' ');
-	return true;
+	spaceCount	= 0;
+	firstSpace	= std::string::npos;
+	lastSpace	= std::string::npos;
+
+	for (size_t i = 0; i < line.size(); ++i)
+	{
+		if (line[i] == ' ')
+		{
+			if (firstSpace == std::string::npos)
+				firstSpace = i;
+			lastSpace = i;
+			++spaceCount;
+		}
+	}
+	return spaceCount != 0;
 }
 
 int validateRequestLine(const std::string &line, size_t &firstSpace, size_t &lastSpace, bool endFound)

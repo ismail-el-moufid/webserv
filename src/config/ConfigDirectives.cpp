@@ -9,8 +9,8 @@
 
 void Config::parseListen(std::vector<Interface> &endpoints)
 {
-	const std::string &address	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	const std::string &port		= tokenStream_.expect(TokenStream::Token::DirectiveWord);
+	const std::string address	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
+	const std::string port		= tokenStream_.expect(TokenStream::Token::DirectiveWord);
 	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
 
 	Interface endpoint;
@@ -29,8 +29,8 @@ void Config::parseServerName(VirtualHost &virtualHost, Route &)
 
 void Config::parseServerErrorPage(VirtualHost &virtualHost, Route &defaults)
 {
-	const std::string &code = tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	const std::string page = relativeToConfDir(tokenStream_.expect(TokenStream::Token::DirectiveWord));
+	const std::string code	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
+	const std::string page	= relativeToConfDir(tokenStream_.expect(TokenStream::Token::DirectiveWord));
 	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
 
 	virtualHost.addErrorPage(code, page);
@@ -39,25 +39,23 @@ void Config::parseServerErrorPage(VirtualHost &virtualHost, Route &defaults)
 
 void Config::parseCgi(Route &route)
 {
-	const std::string &extension	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	const std::string path			= relativeToConfDir(tokenStream_.expect(TokenStream::Token::DirectiveWord));
+	const std::string extension	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
+	const std::string path		= relativeToConfDir(tokenStream_.expect(TokenStream::Token::DirectiveWord));
 	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
 
-	const std::string supported[] = SUPPORTED_CGI_EXTENSIONS;
-	const size_t count = sizeof(supported) / sizeof(supported[0]);
+	const std::string	supported[]	= SUPPORTED_CGI_EXTENSIONS;
+	const size_t		count		= sizeof(supported) / sizeof(supported[0]);
 	for (size_t i = 0; i < count; ++i)
 		if (supported[i] == extension)
-		{
-			route.addCgi(extension, path);
-			return ;
-		}
+			return (route.addCgi(extension, path));
+
 	throw std::runtime_error(StringUtils::currentTime() + " [error] Unsupported CGI extension: " + extension);
 }
 
 void Config::parseRedirect(Route &route)
 {
-	const std::string &code	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
-	const std::string &url	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
+	const std::string code	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
+	const std::string url	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
 	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
 
 	route.setRedirect(code, url);
@@ -65,7 +63,7 @@ void Config::parseRedirect(Route &route)
 
 void Config::parseLocationErrorPage(Route &route)
 {
-	const std::string &code	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
+	const std::string code	= tokenStream_.expect(TokenStream::Token::DirectiveWord);
 	const std::string page	= relativeToConfDir(tokenStream_.expect(TokenStream::Token::DirectiveWord));
 	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter);
 

@@ -2,7 +2,6 @@
 
 std::string MimeUtils::mimeByPath(const std::string &path)
 {
-	// rfind: Find last occurrence of content in string.
 	size_t dot = path.rfind('.');
 	if (dot == std::string::npos)
 		return "application/octet-stream";

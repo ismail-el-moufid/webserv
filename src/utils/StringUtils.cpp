@@ -1,6 +1,6 @@
 #include "utils/StringUtils.hpp"	// toLower, trim, isAllDigits, hasInvalidChar
 #include <cctype>					// isdigit, isspace, tolower, toupper
-#include <ctime>					// NULL, localtime, size_t, strftime, time and 1 more
+#include <ctime>					// localtime, strftime, time_t
 
 namespace StringUtils
 {
@@ -9,7 +9,7 @@ std::string toLower(const std::string &s)
 {
 	std::string result = s;
 	for (size_t i = 0; i < result.size(); ++i)
-		result.at(i) = std::tolower((unsigned char)result.at(i));
+		result[i] = std::tolower((unsigned char)result[i]);
 	return result;
 }
 
@@ -28,8 +28,8 @@ std::string normalizeSlashes(const std::string &target)
 {
 	std::string result;
 	for (size_t i = 0; i < target.size(); ++i)
-		if (target.at(i) != '/' || result.empty() || result.at(result.size() - 1) != '/')
-			result += target.at(i);
+		if (target[i] != '/' || result.empty() || result.back() != '/')
+			result += target[i];
 	return result;
 }
 

@@ -8,7 +8,7 @@
 #include <algorithm>				// find
 #include <stdexcept>				// runtime_error
 
-VirtualHost::VirtualHost() : errorPages_() {}
+VirtualHost::VirtualHost() {}
 
 VirtualHost &VirtualHost::applyDefaults(VirtualHost &virtualHost)
 {
@@ -34,7 +34,7 @@ VirtualHost &VirtualHost::applyDefaults(VirtualHost &virtualHost)
 void VirtualHost::addName(const std::string &name)
 {
 	for (size_t i = 0; i < name.size(); ++i)
-		if (!std::isalnum(name.at(i)) && name.at(i) != '.' && name.at(i) != '-')
+		if (!std::isalnum(name[i]) && name.at(i) != '.' && name.at(i) != '-')
 			throw std::runtime_error(StringUtils::currentTime() + " [error] Invalid server name: " + name);
 	names_.push_back(StringUtils::toLower(name));
 }

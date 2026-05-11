@@ -9,7 +9,7 @@ class HttpResponse
 {
 	public:
 
-		HttpResponse(void);
+		HttpResponse();
 
 		void init();
 
@@ -22,10 +22,10 @@ class HttpResponse
 		bool				hasFile()	const;
 		const std::string	&filePath()	const;
 
-		void reset(void);
+		void reset();
 
 		// serialize: build the complete response.
-		std::string serialize(void) const;
+		std::string serialize() const;
 
 		HttpStatus::Code statusCode() const;
 

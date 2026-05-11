@@ -8,11 +8,10 @@
 #include <ctime>					// time_t
 #include <iostream>					// cerr, endl, streamsize
 #include <limits>					// numeric_limits
-#include <sys/syslimits.h>			// PATH_MAX
 #include <stdexcept>				// runtime_error
 #include <algorithm>				// find
 #include <cstdlib>					// strtol
-#include <string>					// string, rfind
+#include <string>					// string
 
 typedef void (Config::*LocationDirectiveHandler)(Route &);
 typedef void (Config::*ServerDirectiveHandler)(VirtualHost &, Route &);
@@ -22,9 +21,9 @@ Config::Config(VirtualHosts &hosts, ListenEndpoints &endpoints, time_t &timeout)
 
 void Config::parse(const std::string &filePath, VirtualHosts &hosts, ListenEndpoints &endpoints, time_t &timeout)
 {
-	std::ifstream configIfs(filePath.c_str());
-	size_t slash = filePath.rfind('/');
-	confDir_ = (slash != std::string::npos) ? filePath.substr(0, slash) : ".";
+	std::ifstream	configIfs(filePath.c_str());
+	size_t			slash	= filePath.rfind('/');
+	confDir_				= (slash != std::string::npos) ? filePath.substr(0, slash) : ".";
 	if (!configIfs)
 		throw std::runtime_error(StringUtils::currentTime() + " [error] Failed to open config file: " + filePath);
 
@@ -35,9 +34,9 @@ void Config::parse(const std::string &filePath, VirtualHosts &hosts, ListenEndpo
 	{
 		if (tokenStream_.accept("timeout"))
 		{
-			const std::string val = tokenStream_.expect(TokenStream::Token::DirectiveWord);
-			char *end;
-			long parsed = std::strtol(val.c_str(), &end, 10);
+			const std::string	val		= tokenStream_.expect(TokenStream::Token::DirectiveWord);
+			char				*end;
+			long				parsed	= std::strtol(val.c_str(), &end, 10);
 			if (end == val.c_str() || *end != '\0' || parsed <= 0)
 				throw std::runtime_error(StringUtils::currentTime() + " [error] Invalid timeout value: \"" + val + "\"");
 			timeout = static_cast<time_t>(parsed);
@@ -145,8 +144,8 @@ void Config::parseServerBlock(VirtualHosts &hosts, ListenEndpoints &endpoints, I
 		virtualHost.addRoute(defaults);
 
 	hosts.push_back(virtualHost);
-	const std::vector<std::string> &names = hosts.back().names();
-	for (std::vector<Interface>::const_iterator it = currentServerBlockEndpoints.begin(); it != currentServerBlockEndpoints.end(); ++it)
+	const std::vector<std::string>				&names	= hosts.back().names();
+	for (std::vector<Interface>::const_iterator	it		= currentServerBlockEndpoints.begin(); it != currentServerBlockEndpoints.end(); ++it)
 	{
 		endpoints[*it].push_back(&hosts.back());
 		for (size_t n = 0; n < names.size(); ++n)
@@ -230,8 +229,8 @@ std::string Config::relativeToConfDir(const std::string &path) const
 		return path;
 
 	std::vector<std::string>	parts;
-	std::string					full = confDir_ + "/" + path;
-	size_t						start = 0, end;
+	std::string					full	= confDir_ + "/" + path;
+	size_t						start	= 0, end;
 
 	while (start <= full.size())
 	{

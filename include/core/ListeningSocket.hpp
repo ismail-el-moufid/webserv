@@ -12,7 +12,6 @@ class ListeningSocket : public Socket, public IPollable
 public:
 
 	ListeningSocket(const Interface &iface, IOReactor &reactor, const ListenEndpoints &endpoints);
-	~ListeningSocket();
 
 	int	readFd() const;
 	int	writeFd() const;

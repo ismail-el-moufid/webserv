@@ -19,7 +19,6 @@
 
 Client::Client(int fd, const Interface &iface, IOReactor &reactor, const ListenEndpoints &endpts) : IPollable(reactor), socket(fd), iface(iface), endpoints(endpts), writeOffset(0), keepAlive(false), cgi(NULL)
 {
-	std::cout << StringUtils::currentTime() << " [info] New connection: " << socket.get() << std::endl;
 	int rcvbuf = CLIENT_RCVBUF_SIZE;
 	setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
 }
@@ -34,7 +33,6 @@ Client::~Client()
 		cgi = NULL;
 	}
 	reactor_.remove(*this);
-	std::cerr << StringUtils::currentTime() << " [info] Connection closed: " << socket.get() << "\n";
 }
 
 int Client::readFd()	const { return socket.get(); }
@@ -82,9 +80,10 @@ void Client::onRead()
 						size_t bp = ct->second.find("boundary=");
 						if (bp != std::string::npos)
 						{
-							std::string boundary = ct->second.substr(bp + 9);
-							size_t semi = boundary.find(';');
-							if (semi != std::string::npos) boundary = boundary.substr(0, semi);
+							std::string boundary	= ct->second.substr(bp + 9);
+							size_t		semi		= boundary.find(';');
+							if (semi != std::string::npos)
+								boundary = boundary.substr(0, semi);
 							request.initBody(request.route->upload(), boundary);
 						}
 						else
@@ -93,8 +92,6 @@ void Client::onRead()
 					else
 						request.initBody(request.route->upload());
 				}
-			}
-			{
 				const std::map<std::string, std::string> &hdrs = request.headers();
 				std::map<std::string, std::string>::const_iterator expIt = hdrs.find("expect");
 				if (expIt != hdrs.end() && expIt->second == "100-continue")
@@ -103,8 +100,7 @@ void Client::onRead()
 					{
 						const std::string reject = "HTTP/1.1 417 Expectation Failed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 						send(socket.get(), reject.c_str(), reject.size(), 0);
-						delete this;
-						return ;
+						return delete this;
 					}
 					const std::string cont = "HTTP/1.1 100 Continue\r\n\r\n";
 					send(socket.get(), cont.c_str(), cont.size(), 0);
@@ -143,8 +139,8 @@ void Client::onRead()
 	catch (const std::exception &e)
 	{
 		std::cerr << StringUtils::currentTime() << " [error] " << e.what() << "\n";
-		response = HttpResponse::HttpErrorResponse(HttpStatus::InternalServerError);
-		writeBuffer = response.serialize();
+		response	= HttpResponse::HttpErrorResponse(HttpStatus::InternalServerError);
+		writeBuffer	= response.serialize();
 		HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
 		reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
 	}
@@ -177,7 +173,8 @@ void Client::onWrite()
 		if (n > 0)
 		{
 			ssize_t sent = send(socket.get(), chunk, n, 0);
-			if (sent <= 0) return delete this;
+			if (sent <= 0)
+				return delete this;
 			return; // more chunks next POLLOUT
 		}
 		fileStream_.close();

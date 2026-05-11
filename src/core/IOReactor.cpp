@@ -1,6 +1,7 @@
 #include "core/IOReactor.hpp"
 
 #include <cstddef>
+#include <set>
 
 #define REGISTERED(fd) ((fd) != -1 && (size_t)(fd) < fd_to_index_.size() && fd_to_index_.at(fd) != -1)
 
@@ -89,12 +90,11 @@ void IOReactor::remove(IPollable &pollable)
 
 void IOReactor::waitAndDispatch(int timeToWaitInMS)
 {
+	ready_revents_.clear();
+	ready_fds_.clear();
+
 	if (!pfds_.empty() && poll(&pfds_.at(0), pfds_.size(), timeToWaitInMS) > 0)
 	{
-		ready_revents_.clear();
-		ready_fds_.clear();
-
-		// Snapshot fds that are ready
 		for (size_t i = 0; i < pfds_.size(); ++i)
 		{
 			if (pfds_.at(i).revents != 0)
@@ -104,7 +104,6 @@ void IOReactor::waitAndDispatch(int timeToWaitInMS)
 			}
 		}
 
-		// Dispatch events for ready fds
 		for (size_t i = 0; i < ready_fds_.size(); ++i)
 		{
 			if (!REGISTERED(ready_fds_.at(i)))
@@ -115,32 +114,21 @@ void IOReactor::waitAndDispatch(int timeToWaitInMS)
 			if (ready_revents_.at(i) & POLLIN)
 				pol->onRead();
 
-			// Re-check registration as onRead() might have deleted the object
 			if (REGISTERED(ready_fds_.at(i)) && pollables_.at(fd_to_index_.at(ready_fds_.at(i))) == pol)
 				if (ready_revents_.at(i) & POLLOUT)
 					pol->onWrite();
 		}
 	}
 
+	std::set<int> ready_set(ready_fds_.begin(), ready_fds_.end());
+
 	time_t now = time(NULL);
 	for (size_t i = pfds_.size(); i > 0; --i)
 	{
 		size_t current_idx = i - 1;
-
-		// Check if the fd at the current index was already processed in the ready loop
-		bool was_ready = false;
-		for (size_t j = 0; j < ready_fds_.size(); ++j)
-		{
-			if (ready_fds_.at(j) == pfds_.at(current_idx).fd)
-			{
-				was_ready = true;
-				break;
-			}
-		}
-		if (was_ready)
+		if (ready_set.count(pfds_.at(current_idx).fd))
 			continue;
-		
-		// If not ready, check for timeout. This is now safe.
+
 		IPollable *pol = pollables_.at(current_idx);
 		if (now - pol->lastActive() > timeout_)
 			pol->onTimeout();
