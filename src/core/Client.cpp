@@ -19,6 +19,7 @@
 
 Client::Client(int fd, const Interface &iface, IOReactor &reactor, const ListenEndpoints &endpts) : IPollable(reactor), socket(fd), iface(iface), endpoints(endpts), writeOffset(0), keepAlive(false), cgi(NULL)
 {
+	std::cout << StringUtils::currentTime() << " [info] New connection: " << socket.get() << std::endl;
 	int rcvbuf = CLIENT_RCVBUF_SIZE;
 	setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
 }
@@ -33,6 +34,7 @@ Client::~Client()
 		cgi = NULL;
 	}
 	reactor_.remove(*this);
+	std::cerr << StringUtils::currentTime() << " [info] Connection closed: " << socket.get() << "\n";
 }
 
 int Client::readFd()	const { return socket.get(); }
@@ -92,7 +94,6 @@ void Client::onRead()
 						request.initBody(request.route->upload());
 				}
 			}
-			// RFC 7231 §5.1.1 – honour Expect: 100-continue before reading the body
 			{
 				const std::map<std::string, std::string> &hdrs = request.headers();
 				std::map<std::string, std::string>::const_iterator expIt = hdrs.find("expect");
@@ -100,9 +101,7 @@ void Client::onRead()
 				{
 					if (request.contentLength() > request.route->maxBodySize())
 					{
-						const std::string reject = "HTTP/1.1 417 Expectation Failed\r\n"
-						                           "Content-Length: 0\r\n"
-						                           "Connection: close\r\n\r\n";
+						const std::string reject = "HTTP/1.1 417 Expectation Failed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 						send(socket.get(), reject.c_str(), reject.size(), 0);
 						delete this;
 						return ;
@@ -153,19 +152,42 @@ void Client::onRead()
 
 void Client::onWrite()
 {
-	if (writeBuffer.empty() || writeOffset >= writeBuffer.size())
-		return ;
-	ssize_t sent = send(socket.get(), writeBuffer.c_str() + writeOffset, writeBuffer.size() - writeOffset, 0);
-	if (sent <= 0)
-		return delete this;
-
-	writeOffset += sent;
+	// send headers / small body first
 	if (writeOffset < writeBuffer.size())
-		return ;
+	{
+		ssize_t sent = send(socket.get(), writeBuffer.c_str() + writeOffset, writeBuffer.size() - writeOffset, 0);
+		if (sent <= 0)
+			return delete this;
+		writeOffset += sent;
+		if (writeOffset < writeBuffer.size())
+			return;
+	}
+
+	// stream file body in 4KB chunks
+	if (response.hasFile())
+	{
+		if (!fileStream_.is_open())
+			fileStream_.open(response.filePath().c_str(), std::ios::binary);
+		if (!fileStream_.good())
+			return delete this;
+
+		char chunk[4096];
+		fileStream_.read(chunk, sizeof(chunk));
+		std::streamsize n = fileStream_.gcount();
+		if (n > 0)
+		{
+			ssize_t sent = send(socket.get(), chunk, n, 0);
+			if (sent <= 0) return delete this;
+			return; // more chunks next POLLOUT
+		}
+		fileStream_.close();
+	}
+
+	// done
 	if (keepAlive)
 	{
 		request.reset();
-		request.parse(""); // re-parse leftover from rawBuffer_ from position 0
+		request.parse("");
 		response.reset();
 		writeBuffer.clear();
 		writeOffset = 0;

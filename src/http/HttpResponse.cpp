@@ -17,10 +17,15 @@ HttpResponse::HttpResponse(void): status_(HttpStatus::OK)
 	init();
 }
 
-void HttpResponse::setStatus(HttpStatus::Code status)							{ status_						= status; }
-void HttpResponse::setHeader(const std::string &name, const std::string &value)	{ headers_[name]				= value; }
-void HttpResponse::setBody(const std::string &body)								{ headers_["Content-Length"]	= StringUtils::toString(body.size()); body_ = body; }
-void HttpResponse::setContentType(const std::string &type)						{ headers_["Content-Type"]		= type.empty() ? "text/plain" : type; }
+void				HttpResponse::setStatus(HttpStatus::Code status)							{ status_						= status; }
+void				HttpResponse::setHeader(const std::string &name, const std::string &value)	{ headers_[name]				= value; }
+void				HttpResponse::setBody(const std::string &body)								{ headers_["Content-Length"]	= StringUtils::toString(body.size()); body_ = body; }
+void				HttpResponse::setContentType(const std::string &type)						{ headers_["Content-Type"]		= type.empty() ? "text/plain" : type; }
+void				HttpResponse::setFile(const std::string &path, size_t size)					{ filePath_ = path; headers_["Content-Length"] = StringUtils::toString(size); }
+
+bool				HttpResponse::hasFile()												const	{ return !filePath_.empty(); }
+
+const std::string	&HttpResponse::filePath()											const	{ return filePath_; }
 
 std::string HttpResponse::serialize(void) const
 {
@@ -80,6 +85,7 @@ void HttpResponse::reset(void)
 	headers_.clear();
 	init();
 	body_.clear();
+	filePath_.clear();
 }
 
 HttpStatus::Code	HttpResponse::statusCode()	const { return status_; }

@@ -57,8 +57,8 @@ HttpResponse dirListing(const HttpRequest &request, const std::string &path)
 		return HttpPipeline::errorResponse(request, HttpStatus::Forbidden);
 
 	std::ostringstream body;
-	body << "<html><head><title>Index of " << request.uri().path << "</title></head><body><h1>Index of "
-		<< request.uri().path << "</h1><hr><pre><a href=\"../\">../</a>\n";
+	body	<< "<html><head><title>Index of " << request.uri().path << "</title></head><body><h1>Index of "
+			<< request.uri().path << "</h1><hr><pre><a href=\"../\">../</a>\n";
 
 	struct dirent *entry;
 	while ((entry = readdir(dir)) != NULL)
@@ -71,10 +71,10 @@ HttpResponse dirListing(const HttpRequest &request, const std::string &path)
 		std::string display = name + (isDir ? "/" : "");
 		char t[32];
 		strftime(t, sizeof(t), "%d-%b-%Y %H:%M", localtime(&st.st_mtime));
-		body << "<a href=\"" << display << "\">"
-			 << std::left << std::setw(50) << display << "</a>"
-			 << std::setw(20) << t
-			 << (isDir ? "-" : StringUtils::toString(st.st_size)) << "\r\n";
+		body	<< "<a href=\"" << display << "\">"
+				<< std::left << std::setw(50) << display << "</a>"
+				<< std::setw(20) << t
+				<< (isDir ? "-" : StringUtils::toString(st.st_size)) << "\r\n";
 	}
 	closedir(dir);
 	body << "</pre><hr></body>\r\n</html>\r\n";
@@ -88,17 +88,14 @@ HttpResponse dirListing(const HttpRequest &request, const std::string &path)
 
 HttpResponse serveFile(const HttpRequest &request, const std::string &filePath)
 {
-	std::ifstream file(filePath.c_str(), std::ios::binary);
-	if (!file)
+	struct stat st;
+	if (stat(filePath.c_str(), &st) != 0 || !std::ifstream(filePath.c_str()))
 		return HttpPipeline::errorResponse(request, HttpStatus::Forbidden);
-
-	std::ostringstream buf;
-	buf << file.rdbuf();
 
 	HttpResponse res;
 	res.setStatus(HttpStatus::OK);
 	res.setContentType(MimeUtils::mimeByPath(filePath));
-	res.setBody(buf.str());
+	res.setFile(filePath, st.st_size);
 	return res;
 }
 

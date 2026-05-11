@@ -17,13 +17,17 @@ class HttpResponse
 		void setHeader(const std::string &name, const std::string &value);
 		void setContentType(const std::string &type);
 		void setBody(const std::string &body);
+		void setFile(const std::string &path, size_t size);
+
+		bool				hasFile()	const;
+		const std::string	&filePath()	const;
 
 		void reset(void);
 
 		// serialize: build the complete response.
 		std::string serialize(void) const;
 
-		HttpStatus::Code	statusCode()	const;
+		HttpStatus::Code statusCode() const;
 
 		static HttpResponse HttpErrorResponse(HttpStatus::Code status);
 		static HttpResponse HttpResponseRedirect(HttpStatus::Code status, const std::string &location);
@@ -34,5 +38,6 @@ class HttpResponse
 		HttpStatus::Code					status_;
 		std::map<std::string, std::string>	headers_;
 		std::string							body_;
+		std::string							filePath_;
 
 };

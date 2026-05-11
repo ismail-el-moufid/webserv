@@ -118,9 +118,9 @@ void CGIHandler::start(Client &client)
 	// Check if script exists before forking
 	if (access(filename.c_str(), F_OK) == -1)
 	{
-		cgi.stdin.closeRead();
-		cgi.stdin.closeWrite();
-		cgi.stdout.closeWrite();
+		cgi.stdinPipe.closeRead();
+		cgi.stdinPipe.closeWrite();
+		cgi.stdoutPipe.closeWrite();
 		return;
 	}
 
@@ -132,8 +132,8 @@ void CGIHandler::start(Client &client)
 		return ;
 	case 0:
 		// Child Process
-		dup2(cgi.stdin.readFd(), STDIN_FILENO);
-		dup2(cgi.stdout.writeFd(), STDOUT_FILENO);
+		dup2(cgi.stdinPipe.readFd(), STDIN_FILENO);
+		dup2(cgi.stdoutPipe.writeFd(), STDOUT_FILENO);
 		// clear the O_NONBLOCK the pipe inherited
 		fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) & ~O_NONBLOCK);
 		execve(argumnets[0], argumnets, envm);
@@ -141,8 +141,8 @@ void CGIHandler::start(Client &client)
 		break ;
 	default:
 		// Parent Process
-		cgi.stdin.closeRead();
-		cgi.stdout.closeWrite();
+		cgi.stdinPipe.closeRead();
+		cgi.stdoutPipe.closeWrite();
 		cgi.pid = pid;
 	}
 }
@@ -184,7 +184,7 @@ bool CGIHandler::writeStdin(Client &client)
 	if (remaining == 0)
 		return client.request.complete();
 
-	ssize_t written = write(cgi.stdin.writeFd(), cgi.pendingBody.c_str() + cgi.bodyOffset, remaining);
+	ssize_t written = write(cgi.stdinPipe.writeFd(), cgi.pendingBody.c_str() + cgi.bodyOffset, remaining);
 	if (written > 0)
 	{
 		cgi.bodyOffset += written;
@@ -207,7 +207,7 @@ bool CGIHandler::readStdout(Client &client)
 	CGIProcess &cgi = *client.cgi;
 	char buffer[4096];
 
-	bytes = read(cgi.stdout.readFd(), buffer, 4096);
+	bytes = read(cgi.stdoutPipe.readFd(), buffer, 4096);
 	if(bytes > 0)
 		cgi.outputBuffer.append(buffer, bytes);
 	else if(bytes == 0)
@@ -231,7 +231,7 @@ void CGIProcess::onWrite()
 	if (CGIHandler::writeStdin(*client_))
 	{
 		reactor_.mod(*this, CGI_READ_ONLY);
-		stdin.closeWrite();
+		stdinPipe.closeWrite();
 	}
 }
 
@@ -255,5 +255,5 @@ void CGIProcess::onTimeout()
 	client_->clearCgi();
 }
 
-int		CGIProcess::readFd()	const { return stdout.readFd(); }
-int		CGIProcess::writeFd()	const { return stdin.writeFd(); }
+int		CGIProcess::readFd()	const { return stdoutPipe.readFd(); }
+int		CGIProcess::writeFd()	const { return stdinPipe.writeFd(); }

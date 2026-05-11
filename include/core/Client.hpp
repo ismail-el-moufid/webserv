@@ -8,6 +8,8 @@
 #include "http/HttpResponse.hpp"	// HttpResponse
 #include "cgi/cgi.hpp"				// CGIProcess
 
+#include <fstream>					// ifstream
+
 class IOReactor;
 
 class Client : public IPollable
@@ -48,5 +50,7 @@ private:
 	Client();
 	Client(const Client &);
 	Client &operator=(const Client &);
+
+	std::ifstream fileStream_;
 
 };

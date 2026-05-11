@@ -26,8 +26,8 @@ public:
 	int		readFd() const;
 	int		writeFd() const;
 
-	Pipe		stdin;
-	Pipe		stdout;
+	Pipe		stdinPipe;
+	Pipe		stdoutPipe;
 	pid_t		pid;
 	std::string	outputBuffer;
 	std::string	pendingBody;

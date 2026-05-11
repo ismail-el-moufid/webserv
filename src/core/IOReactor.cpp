@@ -109,25 +109,19 @@ void IOReactor::waitAndDispatch(int timeToWaitInMS)
 		{
 			if (!REGISTERED(ready_fds_.at(i)))
 				continue;
-			
+
 			IPollable *pol = pollables_.at(fd_to_index_.at(ready_fds_.at(i)));
-			
+
 			if (ready_revents_.at(i) & POLLIN)
 				pol->onRead();
-			
+
 			// Re-check registration as onRead() might have deleted the object
 			if (REGISTERED(ready_fds_.at(i)) && pollables_.at(fd_to_index_.at(ready_fds_.at(i))) == pol)
-			{
 				if (ready_revents_.at(i) & POLLOUT)
 					pol->onWrite();
-			}
 		}
 	}
 
-	// Check for timeouts on inactive connections
-	// We iterate backward because onTimeout() can call remove(), which uses swap-and-pop.
-	// Backward iteration ensures that removing the current element (or any element after it)
-	// does not affect the indices of the elements we still need to process.
 	time_t now = time(NULL);
 	for (size_t i = pfds_.size(); i > 0; --i)
 	{
@@ -149,9 +143,7 @@ void IOReactor::waitAndDispatch(int timeToWaitInMS)
 		// If not ready, check for timeout. This is now safe.
 		IPollable *pol = pollables_.at(current_idx);
 		if (now - pol->lastActive() > timeout_)
-		{
 			pol->onTimeout();
-		}
 	}
 }
 

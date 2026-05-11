@@ -8,7 +8,7 @@
 #include <ctime>					// time_t
 #include <iostream>					// cerr, endl, streamsize
 #include <limits>					// numeric_limits
-#include <limits.h>					// PATH_MAX
+#include <sys/syslimits.h>			// PATH_MAX
 #include <stdexcept>				// runtime_error
 #include <algorithm>				// find
 #include <cstdlib>					// strtol
@@ -228,10 +228,28 @@ std::string Config::relativeToConfDir(const std::string &path) const
 {
 	if (path.empty() || path[0] == '/')
 		return path;
-	std::string full = confDir_ + "/" + path;
-	char resolved[PATH_MAX];
-	if (realpath(full.c_str(), resolved))
-		return resolved;
-	return full;
-}
 
+	std::vector<std::string>	parts;
+	std::string					full = confDir_ + "/" + path;
+	size_t						start = 0, end;
+
+	while (start <= full.size())
+	{
+		end = full.find('/', start);
+		if (end == std::string::npos)
+			end = full.size();
+
+		std::string part = full.substr(start, end - start);
+		if (part == ".."&& !parts.empty())
+				parts.pop_back();
+		else if (!part.empty() && part != ".")
+			parts.push_back(part);
+
+		start = end + 1;
+	}
+
+	std::string result;
+	for (size_t i = 0; i < parts.size(); ++i)
+		result += "/" + parts[i];
+	return result.empty() ? "/" : result;
+}

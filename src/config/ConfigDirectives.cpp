@@ -72,10 +72,10 @@ void Config::parseLocationErrorPage(Route &route)
 	route.addErrorPage(code, page);
 }
 
-void Config::parseUpload(Route &route)		{ route.setUpload(relativeToConfDir(tokenStream_.expect(TokenStream::Token::DirectiveWord)));		tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
+void Config::parseUpload(Route &route)		{ route.setUpload(relativeToConfDir(tokenStream_.expect(TokenStream::Token::DirectiveWord)));	tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
 void Config::parseRoot(Route &route)		{ route.setRoot(relativeToConfDir(tokenStream_.expect(TokenStream::Token::DirectiveWord)));		tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
-void Config::parseAutoIndex(Route &route)	{ route.setAutoIndex(tokenStream_.expect(TokenStream::Token::DirectiveWord));						tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
-void Config::parseMaxBodySize(Route &route)	{ route.setMaxBodySize(tokenStream_.expect(TokenStream::Token::DirectiveWord));					tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
+void Config::parseAutoIndex(Route &route)	{ route.setAutoIndex(tokenStream_.expect(TokenStream::Token::DirectiveWord));							tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
+void Config::parseMaxBodySize(Route &route)	{ route.setMaxBodySize(tokenStream_.expect(TokenStream::Token::DirectiveWord));						tokenStream_.expect(TokenStream::Token::DirectiveDelimiter); }
 
 void Config::parseAllowedMethods(Route &route)	{ route.clearAllowedMethods(); while (!tokenStream_.accept(TokenStream::Token::DirectiveDelimiter)) route.addMethod(tokenStream_.expect(TokenStream::Token::DirectiveWord)); }
 void Config::parseIndex(Route &route)			{ while (!tokenStream_.accept(TokenStream::Token::DirectiveDelimiter)) route.addIndexFile(tokenStream_.expect(TokenStream::Token::DirectiveWord)); }

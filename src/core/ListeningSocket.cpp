@@ -41,3 +41,5 @@ void ListeningSocket::onRead()
 	try { reactor_.add(*new Client(fd, iface_, reactor_, endpoints_), POLLIN); }
 	catch (const std::exception &e) { std::cerr << StringUtils::currentTime() << " [error] " << e.what() << "\n"; }
 }
+
+ListeningSocket::~ListeningSocket() {	std::cout << StringUtils::currentTime() << " [info] Stopped listening" << "\n"; }
