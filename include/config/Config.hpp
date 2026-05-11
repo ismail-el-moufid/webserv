@@ -3,15 +3,11 @@
 #include "config/VirtualHost.hpp"	// VirtualHost
 #include "utils/NetworkUtils.hpp"	// Interface, InterfaceCompare
 
-
-
-
-
-#include <cstddef>					// size_t
-#include <ctime>					// time_t
 #include <string>					// string
-#include <vector>					// vector
 #include <map>						// map
+#include <vector>					// vector
+#include <ctime>					// time_t
+#include <cstddef>					// size_t
 #include <deque>					// deque
 #include <set>						// set
 #include <fstream>					// ifstream
@@ -19,8 +15,6 @@
 typedef std::deque<VirtualHost>																	VirtualHosts;
 typedef std::map<Interface, std::vector<VirtualHost *>, NetworkUtils::InterfaceCompare>			ListenEndpoints;
 typedef std::map<Interface, std::set<std::string>, NetworkUtils::InterfaceCompare>				InterfaceToServerNames;
-
-
 
 class Config
 {
@@ -111,6 +105,5 @@ private:
 
 	TokenStream tokenStream_;
 	std::string confDir_;
-
 
 };

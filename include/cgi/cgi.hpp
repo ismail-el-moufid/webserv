@@ -1,24 +1,13 @@
 #pragma once
 
-#include "http/HttpRequest.hpp"		// HttpRequest
 #include "utils/NetworkUtils.hpp"	// Interface
-#include "core/Pipe.hpp"			// Interface
+#include "http/HttpRequest.hpp"		// HttpRequest
+#include "core/Pipe.hpp"			// Pipe
 #include "core/IPollable.hpp"		// IOReactor, IPollable
+
 #include <string>					// string
 #include <vector>					// vector
-
-#include <ctime>					// size_t, time_t
-
-
-
-
-
-
-
-
-
-
-
+#include <cstddef>					// size_t
 
 class Client;
 
@@ -30,7 +19,6 @@ public:
 	CGIProcess(IOReactor &reactor, Client &client);
 	~CGIProcess();
 
-	bool	running() const;
 	void	onRead();
 	void	onWrite();
 	void	onTimeout();
@@ -38,12 +26,12 @@ public:
 	int		readFd() const;
 	int		writeFd() const;
 
-	Pipe		stdin_;
-	Pipe		stdout_;
-	pid_t		pid_;
-	time_t		started_;
-	std::string	output_buffer_;
-	size_t		bytes_sent_;
+	Pipe		stdin;
+	Pipe		stdout;
+	pid_t		pid;
+	std::string	outputBuffer;
+	std::string	pendingBody;
+	size_t		bodyOffset;
 
 private:
 

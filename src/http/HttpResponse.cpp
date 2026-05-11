@@ -83,4 +83,3 @@ void HttpResponse::reset(void)
 }
 
 HttpStatus::Code	HttpResponse::statusCode()	const { return status_; }
-size_t				HttpResponse::bodySize()	const { return body_.size(); }

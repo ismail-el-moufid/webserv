@@ -1,26 +1,9 @@
 #pragma once
 
-#include "config/Config.hpp"			// Config
-#include "core/IOReactor.hpp"			// IOReactor
+#include "config/Config.hpp"		// Config
+#include "core/IOReactor.hpp"		// IOReactor
 
-
-
-
-
-#include <ctime>						// time_t
-
-
-
-
-
-
-
-
-
-
-
-
-
+#include <ctime>					// time_t
 
 class Server
 {

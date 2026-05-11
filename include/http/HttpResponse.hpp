@@ -2,25 +2,8 @@
 
 #include "http/HttpStatusCodes.hpp" // Code
 
-
-
-
-
-
 #include <string>					// string
 #include <map>						// map
-
-
-
-
-
-
-
-
-
-
-
-
 
 class HttpResponse
 {
@@ -41,7 +24,6 @@ class HttpResponse
 		std::string serialize(void) const;
 
 		HttpStatus::Code	statusCode()	const;
-		size_t				bodySize()		const;
 
 		static HttpResponse HttpErrorResponse(HttpStatus::Code status);
 		static HttpResponse HttpResponseRedirect(HttpStatus::Code status, const std::string &location);

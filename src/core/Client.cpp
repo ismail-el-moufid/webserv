@@ -1,9 +1,11 @@
 #include "core/Client.hpp"
+#include "Defaults.hpp"
 #include "core/IOReactor.hpp"
 #include "cgi/cgi.hpp"
 #include "http/HttpPipeline.hpp"
 #include "utils/StringUtils.hpp"
 
+#include <ctime>
 #include <iostream>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -15,7 +17,11 @@
 #define WAIT_FOR_CGI				0
 #define CGI_IO						(POLLIN | POLLOUT)
 
-Client::Client(int fd, const Interface &iface, IOReactor &reactor, const ListenEndpoints &endpts) : IPollable(reactor), socket(fd), iface(iface), endpoints(endpts), writeOffset(0), keepAlive(false), cgi(NULL) { }
+Client::Client(int fd, const Interface &iface, IOReactor &reactor, const ListenEndpoints &endpts) : IPollable(reactor), socket(fd), iface(iface), endpoints(endpts), writeOffset(0), keepAlive(false), cgi(NULL)
+{
+	int rcvbuf = CLIENT_RCVBUF_SIZE;
+	setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+}
 
 Client::~Client()
 {
@@ -34,7 +40,7 @@ int Client::writeFd()	const { return socket.get(); }
 
 void Client::onRead()
 {
-	char	buffer[4096];
+	char	buffer[CLIENT_READ_BUFFER_SIZE];
 	ssize_t bytes = recv(socket.get(), buffer, sizeof(buffer), 0);
 
 	if (bytes <= 0)
@@ -52,8 +58,60 @@ void Client::onRead()
 		{
 			HttpPipeline::resolve(request, endpoints, iface);
 			if (request.route)
+			{
 				request.setMaxBodySize(request.route->maxBodySize());
-			request.parse(""); // request pauses its parsing right after finishing header parsing to allow us to set max body size, here we just resume it
+
+				if (request.hasCgi())
+				{
+					cgi = new CGIProcess(reactor_, *this);
+					CGIHandler::start(*this);
+					if (cgi)
+					{
+						reactor_.add(*cgi, CGI_IO);
+						request.initBody(cgi->writeFd());
+					}
+				}
+				else if (!request.route->upload().empty() && (request.method() == "POST" || request.method() == "PUT"))
+				{
+					const std::map<std::string, std::string> &hdrs = request.headers();
+					std::map<std::string, std::string>::const_iterator ct = hdrs.find("content-type");
+					if (ct != hdrs.end())
+					{
+						size_t bp = ct->second.find("boundary=");
+						if (bp != std::string::npos)
+						{
+							std::string boundary = ct->second.substr(bp + 9);
+							size_t semi = boundary.find(';');
+							if (semi != std::string::npos) boundary = boundary.substr(0, semi);
+							request.initBody(request.route->upload(), boundary);
+						}
+						else
+							request.initBody(request.route->upload());
+					}
+					else
+						request.initBody(request.route->upload());
+				}
+			}
+			// RFC 7231 §5.1.1 – honour Expect: 100-continue before reading the body
+			{
+				const std::map<std::string, std::string> &hdrs = request.headers();
+				std::map<std::string, std::string>::const_iterator expIt = hdrs.find("expect");
+				if (expIt != hdrs.end() && expIt->second == "100-continue")
+				{
+					if (request.contentLength() > request.route->maxBodySize())
+					{
+						const std::string reject = "HTTP/1.1 417 Expectation Failed\r\n"
+						                           "Content-Length: 0\r\n"
+						                           "Connection: close\r\n\r\n";
+						send(socket.get(), reject.c_str(), reject.size(), 0);
+						delete this;
+						return ;
+					}
+					const std::string cont = "HTTP/1.1 100 Continue\r\n\r\n";
+					send(socket.get(), cont.c_str(), cont.size(), 0);
+				}
+			}
+			request.parse(""); // resumes body parsing after max body size is set
 			keepAlive = !request.connectionClose();
 		}
 
@@ -64,34 +122,24 @@ void Client::onRead()
 			&& std::find(request.route->allowedMethods().begin(), request.route->allowedMethods().end(), request.method()) == request.route->allowedMethods().end())
 		{
 			response = HttpPipeline::errorResponse(request, HttpStatus::MethodNotAllowed);
+			response.setHeader("Connection", keepAlive ? "keep-alive" : "close");
 			writeBuffer = response.serialize();
 			HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
 			reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
 			return ;
 		}
 
-		if (request.hasCgi())
+		if (cgi)
 		{
-			cgi = new CGIProcess(reactor_, *this);
-			CGIHandler::start(*this);
-			if (!cgi)
-			{
-				response = HttpResponse::HttpErrorResponse(HttpStatus::InternalServerError);
-				writeBuffer = response.serialize();
-				HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
-				reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
-				return ;
-			}
-			reactor_.add(*cgi, CGI_IO);
 			reactor_.mod(*this, WAIT_FOR_CGI);
+			return ;
 		}
-		else
-		{
-			response = HttpPipeline::buildResponse(request);
-			writeBuffer = response.serialize();
-			HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
-			reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
-		}
+
+		response = HttpPipeline::buildResponse(request);
+		response.setHeader("Connection", keepAlive ? "keep-alive" : "close");
+		writeBuffer = response.serialize();
+		HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
+		reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
 	}
 	catch (const std::exception &e)
 	{

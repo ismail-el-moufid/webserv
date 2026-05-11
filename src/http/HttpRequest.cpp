@@ -1,6 +1,7 @@
 #include "http/HttpRequest.hpp"		// HttpRequest
+#include "http/HttpRequestBody.hpp"	// HttpRequestBody
 #include "http/HttpStatusCodes.hpp"	// BadRequest, ContentTooLarge
-#include "utils/StringUtils.hpp"
+#include "utils/StringUtils.hpp"	// normalizeSlashes
 
 #include <string>					// string
 #include <map>						// map
@@ -74,9 +75,6 @@ bool HttpRequest::parseHeaders()
 	if (!chunked_ && maxBodySizeSet_ && contentLength_ > maxBodySize_)
 		return errorCode_ = ContentTooLarge, false;
 
-	if (!chunked_)
-		body_.reserve(contentLength_);
-
 	if (!chunked_ && contentLength_ == 0)
 		complete_ = true;
 
@@ -85,20 +83,18 @@ bool HttpRequest::parseHeaders()
 	return true;
 }
 
-bool parseFixedBody(std::string &rawBuffer, size_t &bytesParsed, std::string &body, bool &complete, size_t contentLength);
-bool parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, std::string &body, bool &complete, int &errorCode, size_t maxBodySize);
+void parseFixedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBody &body, bool &complete, size_t contentLength);
+void parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBody &body, bool &complete, int &errorCode, size_t maxBodySize);
 
 void HttpRequest::parseBody()
 {
 	if (chunked_)
 	{
-		while (!complete_ && parseChunkedBody(rawBuffer_, bytesParsed_, body_, complete_, errorCode_, maxBodySize_))
-			cleanBuffer();
-		if (complete_)
-			contentLength_ = body_.size();
+		while (!complete_)
+			parseChunkedBody(rawBuffer_, bytesParsed_, body_, complete_, errorCode_, maxBodySize_);
+		contentLength_ = body_.size();
 	}
-	else if (parseFixedBody(rawBuffer_, bytesParsed_, body_, complete_, contentLength_))
-		cleanBuffer();
+	parseFixedBody(rawBuffer_, bytesParsed_, body_, complete_, contentLength_);
 }
 
 void HttpRequest::parse(const std::string &rawBytes)
@@ -111,21 +107,23 @@ void HttpRequest::parse(const std::string &rawBytes)
 	{
 		if (!parseRequestLine())
 			return ;
-		cleanBuffer();
 		if (!parseHeaders())
 			return ;
-		cleanBuffer();
 		return ; // pause here caller must set maxBodySize then call parse("") to continue
 	}
 	parseBody();
 }
 
-void HttpRequest::cleanBuffer()
+void HttpRequest::initBody(int fd)														{ body_.init(fd); }
+void HttpRequest::initBody(const std::string &uploadDir)								{ body_.init(uploadDir); }
+void HttpRequest::initBody(const std::string &uploadDir, const std::string &boundary)	{ body_.init(uploadDir, boundary); }
+
+void HttpRequest::URI::clear(void)
 {
-	if (bytesParsed_ == 0)
-		return ;
-	rawBuffer_.erase(0, bytesParsed_);
-	bytesParsed_ = 0;
+	uri.clear();
+	path.clear();
+	query.clear();
+	hasQuery = false;
 }
 
 void HttpRequest::reset()
@@ -139,15 +137,22 @@ void HttpRequest::reset()
 	maxBodySizeSet_		= false;
 	connectionClose_	= true;
 	errorCode_			= 0;
-	bytesParsed_		= 0;
 	contentLength_		= 0;
 	maxBodySize_		= 0;
 	method_.clear();
 	uri_.clear();
 	version_.clear();
 	headers_.clear();
-	body_.clear();
-	// rawBuffer_ is not cleared to allow for pipelined requests
+	body_.reset();
+
+	if (bytesParsed_ > 0)
+	{
+		if (bytesParsed_ < rawBuffer_.size())
+			rawBuffer_.erase(0, bytesParsed_);
+		else
+			rawBuffer_.clear();
+	}
+	bytesParsed_ = 0;
 }
 
 bool HttpRequest::hasCgi() const
@@ -178,17 +183,8 @@ const std::string							&HttpRequest::method()			const { return method_; }
 const HttpRequest::URI						&HttpRequest::uri()				const { return uri_; }
 const std::string							&HttpRequest::version()			const { return version_; }
 const std::map<std::string, std::string>	&HttpRequest::headers()			const { return headers_; }
-const std::string							&HttpRequest::body()			const { return body_; }
 size_t										HttpRequest::contentLength()	const { return contentLength_; }
 const std::string							&HttpRequest::host()			const { return host_; }
 bool										HttpRequest::erroneous()		const { return errorCode_ != 0; }
 bool										HttpRequest::connectionClose()	const { return connectionClose_; }
 HttpStatus::Code							HttpRequest::errorCode()		const { return static_cast<Code>(errorCode_); }
-
-
-void HttpRequest::URI::clear(void) {
-	uri.clear();
-	path.clear();
-	query.clear();
-	hasQuery = false;
-}

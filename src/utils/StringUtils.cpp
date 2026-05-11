@@ -12,13 +12,6 @@ std::string toLower(const std::string &s)
 		result.at(i) = std::tolower((unsigned char)result.at(i));
 	return result;
 }
-std::string toUpper(const std::string &s)
-{
-	std::string result = s;
-	for (size_t i = 0; i < result.size(); ++i)
-		result.at(i) = std::toupper((unsigned char)result.at(i));
-	return result;
-}
 
 std::string trim(const std::string &s)
 {

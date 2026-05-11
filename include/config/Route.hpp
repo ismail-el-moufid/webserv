@@ -2,25 +2,10 @@
 
 #include "http/HttpStatusCodes.hpp"	// Code
 
-
-
-
-
-
-#include <cstddef>					// size_t
 #include <string>					// string
-#include <vector>					// vector
 #include <map>						// map
-
-
-
-
-
-
-
-
-
-
+#include <vector>					// vector
+#include <cstddef>					// size_t
 
 class Route
 {

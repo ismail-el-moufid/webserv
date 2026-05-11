@@ -2,25 +2,13 @@
 
 #include "config/VirtualHost.hpp"	// VirtualHost
 #include "http/HttpStatusCodes.hpp"	// Code
-
-
-
-
+#include "http/HttpRequestBody.hpp"	// HttpRequestBody
 
 #include <string>					// string
 #include <map>						// map
 
-
-
-
-
-
-
 #define VALID 0
 #define NEED_MORE_DATA 0
-
-
-
 
 class HttpRequest
 {
@@ -45,6 +33,9 @@ public:
 	void parse(const std::string &rawBytes);
 
 	void setMaxBodySize(size_t maxBodySize);
+	void initBody(int fd);
+	void initBody(const std::string &uploadDir);
+	void initBody(const std::string &uploadDir, const std::string &boundary);
 
 	void reset();
 
@@ -55,7 +46,6 @@ public:
 	const std::string							&version() const;
 	const std::map<std::string, std::string>	&headers() const;
 	const std::string							&host() const;
-	const std::string							&body() const;
 	size_t										contentLength() const;
 	bool										hasCgi() const;
 	bool										erroneous() const;
@@ -68,13 +58,14 @@ public:
 
 private:
 
+	HttpRequest(const HttpRequest &);
+	HttpRequest &operator=(const HttpRequest &);
+
 	bool parseRequestLine();
 
 	bool parseHeaders();
 
 	void parseBody();
-
-	void cleanBuffer();
 
 	// state
 	bool	complete_;
@@ -95,6 +86,6 @@ private:
 	std::string							version_;
 	std::map<std::string, std::string>	headers_;
 	std::string							host_;
-	std::string							body_;
+	HttpRequestBody						body_;
 
 };

@@ -1,26 +1,11 @@
 #pragma once
 
-#include "config/Route.hpp"			// Route
 #include "http/HttpStatusCodes.hpp"	// Code
-
-
-
-
+#include "config/Route.hpp"			// Route
 
 #include <string>					// string
-#include <vector>					// vector
 #include <map>						// map
-
-
-
-
-
-
-
-
-
-
-
+#include <vector>					// vector
 
 class VirtualHost
 {

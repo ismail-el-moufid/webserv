@@ -24,8 +24,9 @@ SRCS			= src/main.cpp \
 				src/http/HttpPipeline.cpp \
 				src/http/HttpRequest.cpp \
 				src/http/HttpRequestBody.cpp \
-				src/http/HttpRequestHeaders.cpp \
-				src/http/HttpRequestLine.cpp \
+				src/utils/HttpRequestBodyUtils.cpp \
+				src/utils/HttpRequestHeadersUtils.cpp \
+				src/utils/HttpRequestLineUtils.cpp \
 				src/http/HttpResponse.cpp \
 				src/http/HttpStatusCodes.cpp \
 				src/utils/MimeUtils.cpp \

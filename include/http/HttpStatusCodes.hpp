@@ -1,26 +1,6 @@
 #pragma once
 
-
-
-
-
-
-
-
 #include <string>					// string
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 namespace HttpStatus
 {
@@ -100,4 +80,5 @@ namespace HttpStatus
 	bool		isErrorCode(Code code);
 	bool		isErrorCode(const std::string &code);
 	Code		toCode(const std::string &code);
+
 }

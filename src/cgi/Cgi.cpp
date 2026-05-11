@@ -115,14 +115,12 @@ void CGIHandler::start(Client &client)
 	argumnets = const_cast<char**>(&arg[0]);
 	envm = const_cast<char**>(&env[0]);
 
-	cgi.started_ = time(NULL);
-
 	// Check if script exists before forking
 	if (access(filename.c_str(), F_OK) == -1)
 	{
-		cgi.stdin_.closeRead();
-		cgi.stdin_.closeWrite();
-		cgi.stdout_.closeWrite();
+		cgi.stdin.closeRead();
+		cgi.stdin.closeWrite();
+		cgi.stdout.closeWrite();
 		return;
 	}
 
@@ -134,8 +132,8 @@ void CGIHandler::start(Client &client)
 		return ;
 	case 0:
 		// Child Process
-		dup2(cgi.stdin_.readFd(), STDIN_FILENO);
-		dup2(cgi.stdout_.writeFd(), STDOUT_FILENO);
+		dup2(cgi.stdin.readFd(), STDIN_FILENO);
+		dup2(cgi.stdout.writeFd(), STDOUT_FILENO);
 		// clear the O_NONBLOCK the pipe inherited
 		fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) & ~O_NONBLOCK);
 		execve(argumnets[0], argumnets, envm);
@@ -143,9 +141,9 @@ void CGIHandler::start(Client &client)
 		break ;
 	default:
 		// Parent Process
-		cgi.stdin_.closeRead();
-		cgi.stdout_.closeWrite();
-		cgi.pid_ = pid;
+		cgi.stdin.closeRead();
+		cgi.stdout.closeWrite();
+		cgi.pid = pid;
 	}
 }
 
@@ -154,15 +152,15 @@ void CGIHandler::finish(Client &client)
 	int status;
 	CGIProcess &cgi = *client.cgi;
 
-	if (cgi.pid_ == -1) // We aborted early because the file didn't exist
+	if (cgi.pid == -1) // We aborted early because the file didn't exist
 	{
 		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::NotFound);
 		return;
 	}
 
-	waitpid(cgi.pid_, &status, 0);
+	waitpid(cgi.pid, &status, 0);
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
-		client.response = HttpPipeline::buildResponseFromRaw(client.request, cgi.output_buffer_);
+		client.response = HttpPipeline::buildResponseFromRaw(client.request, cgi.outputBuffer);
 	else
 		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
 }
@@ -172,25 +170,31 @@ void CGIHandler::killProcess(Client &client)
 	int status;
 	CGIProcess &cgi = *client.cgi;
 
-	kill(cgi.pid_, SIGKILL);
-	waitpid(cgi.pid_, &status, 0);
+	kill(cgi.pid, SIGKILL);
+	waitpid(cgi.pid, &status, 0);
 	client.response = HttpPipeline::errorResponse(client.request, HttpStatus::GatewayTimeout);
 }
 
-
 bool CGIHandler::writeStdin(Client &client)
 {
-	ssize_t written;
-
 	CGIProcess &cgi = *client.cgi;
-	const HttpRequest &request = client.request;
 
-	if(cgi.bytes_sent_ >= request.contentLength())
-		return true;
+	size_t remaining = cgi.pendingBody.size() - cgi.bodyOffset;
 
-	written = write(cgi.stdin_.writeFd(), request.body().c_str() + cgi.bytes_sent_ , request.contentLength() - cgi.bytes_sent_);
-	if(written > 0)
-		cgi.bytes_sent_ += written;
+	if (remaining == 0)
+		return client.request.complete();
+
+	ssize_t written = write(cgi.stdin.writeFd(), cgi.pendingBody.c_str() + cgi.bodyOffset, remaining);
+	if (written > 0)
+	{
+		cgi.bodyOffset += written;
+		if (cgi.bodyOffset >= cgi.pendingBody.size())
+		{
+			cgi.pendingBody.clear();
+			cgi.bodyOffset = 0;
+			return client.request.complete();
+		}
+	}
 	else if (written == -1)
 		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
 
@@ -203,9 +207,9 @@ bool CGIHandler::readStdout(Client &client)
 	CGIProcess &cgi = *client.cgi;
 	char buffer[4096];
 
-	bytes = read(cgi.stdout_.readFd(), buffer, 4096);
+	bytes = read(cgi.stdout.readFd(), buffer, 4096);
 	if(bytes > 0)
-		cgi.output_buffer_.append(buffer, bytes);
+		cgi.outputBuffer.append(buffer, bytes);
 	else if(bytes == 0)
 	{
 		return true;
@@ -218,7 +222,7 @@ bool CGIHandler::readStdout(Client &client)
 
 #define CGI_READ_ONLY	POLLIN
 
-CGIProcess::CGIProcess(IOReactor &reactor, Client &client) : IPollable(reactor), pid_(-1), started_(0), bytes_sent_(0), client_(&client) { }
+CGIProcess::CGIProcess(IOReactor &reactor, Client &client) : IPollable(reactor), pid(-1), bodyOffset(0), client_(&client) { }
 
 CGIProcess::~CGIProcess() { reactor_.remove(*this); }
 
@@ -227,7 +231,7 @@ void CGIProcess::onWrite()
 	if (CGIHandler::writeStdin(*client_))
 	{
 		reactor_.mod(*this, CGI_READ_ONLY);
-		stdin_.closeWrite();
+		stdin.closeWrite();
 	}
 }
 
@@ -251,6 +255,5 @@ void CGIProcess::onTimeout()
 	client_->clearCgi();
 }
 
-int		CGIProcess::readFd()	const { return stdout_.readFd(); }
-int		CGIProcess::writeFd()	const { return stdin_.writeFd(); }
-bool	CGIProcess::running()	const { return pid_ != -1; }
+int		CGIProcess::readFd()	const { return stdout.readFd(); }
+int		CGIProcess::writeFd()	const { return stdin.writeFd(); }

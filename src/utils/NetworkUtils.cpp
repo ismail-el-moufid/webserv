@@ -36,7 +36,6 @@ bool resolve(const std::string &address, const std::string &port, Interface &res
 	return true;
 }
 
-
 bool InterfaceCompare::operator()(const Interface &a, const Interface &b) const
 {
 	if (a.family	!= b.family)	return a.family		< b.family;

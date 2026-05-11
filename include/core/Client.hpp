@@ -1,23 +1,12 @@
 #pragma once
 
-#include "config/Config.hpp"		// ListenEndpoints
 #include "core/IPollable.hpp"		// IPollable
-#include "core/Socket.hpp"			// Socket
 #include "utils/NetworkUtils.hpp"	// Interface
 #include "http/HttpRequest.hpp"		// HttpRequest
+#include "config/Config.hpp"		// ListenEndpoints
+#include "core/Socket.hpp"			// Socket
 #include "http/HttpResponse.hpp"	// HttpResponse
 #include "cgi/cgi.hpp"				// CGIProcess
-
-
-
-
-
-
-
-
-
-
-
 
 class IOReactor;
 
@@ -51,7 +40,6 @@ public:
 	size_t		writeOffset;
 
 	bool	keepAlive;
-
 
 	CGIProcess *cgi; // allocated in Client::onRead(), deleted in CGIHandler::finish/kill and ~Client
 

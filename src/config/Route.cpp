@@ -25,7 +25,6 @@ void Route::setMaxBodySize(const std::string &maxBodySize)
 void	Route::setPath(const std::string &path)	{ path_ = StringUtils::normalizeSlashes(path); }
 void	Route::setRoot(const std::string &root)	{ (root_ = StringUtils::normalizeSlashes(root)).erase(root_.find_last_not_of('/') + 1); }
 
-
 void Route::addErrorPage(const std::string &code, const std::string &page)
 {
 	if (!HttpStatus::isErrorCode(code))

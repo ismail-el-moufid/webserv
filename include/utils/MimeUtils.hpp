@@ -1,26 +1,6 @@
 #pragma once
 
-
-
-
-
-
-
-
-# include <string>
-
-
-
-
-
-
-
-
-
-
-
-
-
+#include <string>					// string
 
 namespace MimeUtils
 {

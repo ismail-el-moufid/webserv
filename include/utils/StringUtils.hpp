@@ -1,32 +1,13 @@
 #pragma once
 
-
-
-
-
-
-
-
 #include <string>					// string
 #include <sstream>					// ostringstream
 #include <vector>					// vector
-
-
-
-
-
-
-
-
-
-
-
 
 namespace StringUtils
 {
 
 	std::string					toLower(const std::string &s);
-	std::string					toUpper(const std::string &s);
 	std::string					trim(const std::string &s);
 	std::string					normalizeSlashes(const std::string &target);
 	bool						isAllDigits(const std::string &s, size_t start = 0, size_t end = std::string::npos);

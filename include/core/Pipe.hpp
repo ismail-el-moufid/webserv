@@ -1,27 +1,5 @@
 #pragma once
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 class Pipe
 {
 

@@ -1,26 +1,10 @@
 #pragma once
 
-#include "config/Config.hpp"		// ListenEndpoints
 #include "core/IPollable.hpp"		// IPollable
+#include "config/Config.hpp"		// ListenEndpoints
 #include "core/Socket.hpp"			// Socket
 #include "core/IOReactor.hpp"		// IOReactor
 #include "utils/NetworkUtils.hpp"	// Interface
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 class ListeningSocket : public Socket, public IPollable
 {
