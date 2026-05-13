@@ -1,4 +1,5 @@
 #include "cgi/cgi.hpp"
+#include "config/Route.hpp"
 #include "core/Client.hpp"
 #include "core/IOReactor.hpp"
 #include "http/HttpPipeline.hpp"
@@ -66,7 +67,7 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 	env.push_back("GATEWAY_INTERFACE=CGI/1.1");
 	env.push_back("REDIRECT_STATUS=200");
 
-	std::string ip, port, serverName;
+	std::string serverName, ip, port;
 	NetworkUtils::extractIPPort(iface, ip, port);
 	if (!request.host().empty())
 		serverName = request.host();
@@ -86,8 +87,8 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 std::vector<std::string> CGIHandler::buildArg(const std::string &filename, const Route &route)
 {
 	size_t						dot_pos		= filename.rfind('.');
-	std::vector<std::string>	arg;
 	std::string					extention	= filename.substr(dot_pos);
+	std::vector<std::string>	arg;
 	std::map<std::string, std::string>::const_iterator it = route.cgis().find(extention);
 	arg.push_back(it->second);
 	arg.push_back(filename);
@@ -138,8 +139,9 @@ void CGIHandler::start(Client &client)
 		// Child Process
 		dup2(cgi.stdinPipe.readFd(), STDIN_FILENO);
 		dup2(cgi.stdoutPipe.writeFd(), STDOUT_FILENO);
-		// clear the O_NONBLOCK the pipe inherited
-		fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) & ~O_NONBLOCK);
+		fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) & ~O_NONBLOCK); // clear the O_NONBLOCK the pipe inherited
+		if (chdir(filename.substr(0, filename.rfind('/')).c_str()) == -1) // Change to the script's directory to support relative includes and such
+			exit(1);
 		execve(arguments[0], arguments, envm);
 		exit(1);
 	default:
