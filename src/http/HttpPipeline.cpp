@@ -1,7 +1,9 @@
 #include "http/HttpPipeline.hpp"	// buildResponse, buildResponseFromRaw, errorResponse, logRequest, resolve
 #include "utils/MimeUtils.hpp"		// MimeUtils::mimeByPath
+
+#include <algorithm>				// find
 #include "utils/StringUtils.hpp"	// currentTime, toString, trim
-#include "http/HttpStatusCodes.hpp"	// Code, ContentTooLarge, Created, Forbidden, InternalServerError and 7 more
+#include "http/HttpStatusCodes.hpp"	// Code, ContentTooLarge, Created, Forbidden, InternalServerError, OK, MovedPermanently, NotFound, NoContent, isValidCode, toCode, isErrorCode 
 
 #include <dirent.h>				// opendir, readdir, closedir
 #include <fstream>				// ifstream
@@ -10,8 +12,7 @@
 #include <sys/stat.h>			// stat, S_ISDIR
 #include <iostream>				// cout, ios, left
 #include <cstdlib>				// strtol
-#include <sys/stat.h>			// S_ISDIR, stat
-
+#include <unistd.h>				// access
 namespace
 {
 
@@ -35,10 +36,10 @@ const Route *resolveRoute(const VirtualHost &vhost, const std::string &uri)
 		const std::string &path = routes.at(i).path();
 
 		if (uri.compare(0, path.size(), path) != 0)
-			continue;
+			continue ;
 
 		if (path != "/" && uri.size() > path.size() && uri.at(path.size()) != '/')
-			continue;
+			continue ;
 
 		if (path.size() > bestLen)
 		{
@@ -65,10 +66,10 @@ HttpResponse dirListing(const HttpRequest &request, const std::string &path)
 	{
 		std::string name(entry->d_name);
 		if (name == "." || name == "..")
-			continue;
+			continue ;
 		struct stat st;
 		if (stat((path + "/" + name).c_str(), &st) != 0)
-			continue;
+			continue ;
 		bool		isDir	= S_ISDIR(st.st_mode);
 		std::string	display	= name + (isDir ? "/" : "");
 		char t[32];
@@ -91,7 +92,7 @@ HttpResponse dirListing(const HttpRequest &request, const std::string &path)
 HttpResponse serveFile(const HttpRequest &request, const std::string &filePath)
 {
 	struct stat st;
-	if (stat(filePath.c_str(), &st) != 0 || !std::ifstream(filePath.c_str()))
+	if (stat(filePath.c_str(), &st) != 0)
 		return HttpPipeline::errorResponse(request, HttpStatus::Forbidden);
 
 	HttpResponse res;
@@ -133,7 +134,32 @@ HttpResponse staticResponse(const HttpRequest &request)
 	return HttpPipeline::errorResponse(request, HttpStatus::Forbidden);
 }
 
-} // namespace
+HttpResponse deleteResponse(const HttpRequest &request)
+{
+	std::string root = request.route->root();
+	if (!root.empty() && root[root.size() - 1] == '/')
+		root.erase(root.size() - 1);
+	std::string path = root + request.uri().path;
+
+	struct stat path_stat;
+
+	if (stat(path.c_str(), &path_stat) != 0)
+		return HttpPipeline::errorResponse(request, HttpStatus::NotFound);
+	if (S_ISDIR(path_stat.st_mode))
+		return HttpPipeline::errorResponse(request, HttpStatus::Forbidden);
+	if (access(path.c_str(), W_OK) != 0)
+		return HttpPipeline::errorResponse(request, HttpStatus::Forbidden);
+	if (std::remove(path.c_str()) == 0)
+	{
+		HttpResponse res;
+		res.setStatus(HttpStatus::NoContent);
+		return res;
+	}
+	else
+		return HttpPipeline::errorResponse(request, HttpStatus::InternalServerError);
+}
+
+}
 
 namespace HttpPipeline
 {
@@ -144,9 +170,9 @@ void resolve(HttpRequest &request, const ListenEndpoints &endpoints, const Inter
 	request.route = NULL;
 	ListenEndpoints::const_iterator it = endpoints.find(iface);
 	if (it == endpoints.end() || it->second.empty())
-		return;
+		return ;
 	if (!(request.vhost = resolveVhost(it->second, request.host())))
-		return;
+		return ;
 	request.route = resolveRoute(*request.vhost, request.uri().path);
 }
 
@@ -158,22 +184,38 @@ HttpResponse buildResponse(const HttpRequest &request)
 	if (!request.route)
 		return errorResponse(request, HttpStatus::NotFound);
 
-	if (request.contentLength() > request.route->maxBodySize())
+	if (request.route->maxBodySize() > 0 && request.contentLength() > request.route->maxBodySize())
 		return errorResponse(request, HttpStatus::ContentTooLarge);
 
+	// Redirects bypass method checking — a redirect is not a resource.
 	if (request.route->redirected())
 		return HttpResponse::HttpResponseRedirect(request.route->redirectCode(), request.route->redirectPage());
+
+	// Current implementation only allows HEAD for GET routes
+	const std::string &method = request.method();
+	const std::string effectiveMethod = (method == "HEAD") ? "GET" : method;
+
+	if (find(request.route->allowedMethods().begin(), request.route->allowedMethods().end(), effectiveMethod) == request.route->allowedMethods().end())
+		return errorResponse(request, HttpStatus::MethodNotAllowed);
 
 	if (request.hasCgi())
 		return errorResponse(request, HttpStatus::InternalServerError);
 
-	if (!request.route->upload().empty() && (request.method() == "POST" || request.method() == "PUT"))
+	if (!request.route->upload().empty() && (effectiveMethod == "POST" || effectiveMethod == "PUT"))
 		return HttpResponse::HttpResponseBuilder(HttpStatus::Created, "{\"status\":\"ok\"}", "application/json");
 
-	if (request.method() == "GET")
-		return staticResponse(request);
+	if (effectiveMethod == "DELETE")
+		return deleteResponse(request);
 
-	return errorResponse(request, HttpStatus::MethodNotAllowed);
+	if (effectiveMethod == "GET")
+	{
+		HttpResponse resp = staticResponse(request);
+		if (method == "HEAD" && !resp.hasFile())
+			resp.setBody("");
+		return resp;
+	}
+
+	return errorResponse(request, HttpStatus::NotImplemented);
 }
 
 void logRequest(const HttpRequest &request, const HttpResponse &response, const Interface &iface, size_t bytesSent)
@@ -220,20 +262,41 @@ HttpResponse errorResponse(const HttpRequest &request, HttpStatus::Code code)
 	return res;
 }
 
-HttpResponse buildResponseFromRaw(const HttpRequest &request, const std::string &rawOutput)
+int prepareUploadRequest(HttpRequest &request)
 {
-	size_t headerEnd = rawOutput.find("\r\n\r\n"), step = 4;
+	struct stat uploadDir;
+	if (stat(request.route->upload().c_str(), &uploadDir) != 0 || !S_ISDIR(uploadDir.st_mode) || access(request.route->upload().c_str(), W_OK) == -1)
+		return HttpStatus::InternalServerError;
+
+	size_t boundaryPos = request.contentType().find("boundary=");
+	if (boundaryPos != std::string::npos)
+	{
+		request.initBodyMultipart(request.route->upload(), request.contentType().substr(boundaryPos + 9, request.contentType().find(';', boundaryPos + 9) - (boundaryPos + 9)));
+		return 0;
+	}
+	// Use the URI basename as the filename so POST /uploads/foo.txt saves as foo.txt.
+	std::string filename = StringUtils::uriBasename(request.uri().path);
+	if (filename.empty())
+		request.initBodyRaw(request.route->upload());
+	else
+		request.initBodyRaw(request.route->upload(), filename);
+	return 0;
+}
+
+HttpResponse buildResponseFromRaw(const HttpRequest &request, const std::string &raw)
+{
+	size_t headerEnd = raw.find("\r\n\r\n"), step = 4;
 
 	if (headerEnd == std::string::npos)
 	{
-		headerEnd	= rawOutput.find("\n\n");
+		headerEnd	= raw.find("\n\n");
 		step		= 2;
 	}
 	if (headerEnd == std::string::npos)
 		return errorResponse(request, HttpStatus::InternalServerError);
 
-	std::istringstream ss(rawOutput.substr(0, headerEnd));
-	std::string body = rawOutput.substr(headerEnd + step);
+	std::istringstream ss(raw.substr(0, headerEnd));
+	std::string body = raw.substr(headerEnd + step);
 
 	HttpResponse response;
 	std::string line;
@@ -243,7 +306,8 @@ HttpResponse buildResponseFromRaw(const HttpRequest &request, const std::string 
 		if (!line.empty() && line[line.size() - 1] == '\r')
 			line.erase(line.size() - 1);
 		size_t colon = line.find(':');
-		if (colon == std::string::npos) continue;
+		if (colon == std::string::npos)
+			continue ;
 		std::string name	= StringUtils::trim(line.substr(0, colon));
 		std::string value	= StringUtils::trim(line.substr(colon + 1));
 		if (name == "Status")
@@ -255,6 +319,8 @@ HttpResponse buildResponseFromRaw(const HttpRequest &request, const std::string 
 				? HttpStatus::toCode(code)
 				: HttpStatus::InternalServerError);
 		}
+		else if (name == "Set-Cookie")
+			response.addCookie(value);
 		else
 			response.setHeader(name, value);
 	}

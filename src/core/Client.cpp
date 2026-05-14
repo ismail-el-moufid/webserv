@@ -1,7 +1,7 @@
 #include "core/Client.hpp"
 #include "Defaults.hpp"
 #include "core/IOReactor.hpp"
-#include "cgi/cgi.hpp"
+#include "cgi/Cgi.hpp"
 #include "http/HttpPipeline.hpp"
 #include "utils/StringUtils.hpp"
 
@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <algorithm>
+#include <sys/stat.h>
 
 #define WAIT_FOR_CLIENT_DATA		POLLIN
 #define WAIT_TO_SEND_RESPONSE		POLLOUT
@@ -17,7 +18,7 @@
 #define WAIT_FOR_CGI				0
 #define CGI_IO						(POLLIN | POLLOUT)
 
-Client::Client(int fd, const Interface &iface, IOReactor &reactor, const ListenEndpoints &endpts) : IPollable(reactor), socket(fd), iface(iface), endpoints(endpts), writeOffset(0), keepAlive(false), cgi(NULL)
+Client::Client(int fd, const Interface &iface, IOReactor &reactor, const ListenEndpoints &endpts) : IPollable(reactor), socket(fd), iface(iface), endpoints(endpts), writeOffset(0), keepAlive(false), draining_(false), cgi(NULL)
 {
 	int rcvbuf = CLIENT_RCVBUF_SIZE;
 	setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
@@ -49,6 +50,9 @@ void Client::onRead()
 		return ;
 	}
 
+	if (draining_)
+		return ; // body being drained — discard bytes, wait for client to close or timeout
+
 	try
 	{
 		updateActivity();
@@ -60,6 +64,12 @@ void Client::onRead()
 			if (request.route)
 			{
 				request.setMaxBodySize(request.route->maxBodySize());
+
+				if (request.contentLength() > request.route->maxBodySize())
+					return sendErrorResponse(HttpStatus::ContentTooLarge);
+
+				if (request.expectsContinue())
+					send(socket.get(), "HTTP/1.1 100 Continue\r\n\r\n", 25, 0);
 
 				if (request.hasCgi())
 				{
@@ -73,56 +83,20 @@ void Client::onRead()
 				}
 				else if (!request.route->upload().empty() && (request.method() == "POST" || request.method() == "PUT"))
 				{
-					const std::map<std::string, std::string> &hdrs = request.headers();
-					std::map<std::string, std::string>::const_iterator ct = hdrs.find("content-type");
-					if (ct != hdrs.end())
+					int err = HttpPipeline::prepareUploadRequest(request);
+					if (err)
 					{
-						size_t bp = ct->second.find("boundary=");
-						if (bp != std::string::npos)
-						{
-							std::string boundary	= ct->second.substr(bp + 9);
-							size_t		semi		= boundary.find(';');
-							if (semi != std::string::npos)
-								boundary = boundary.substr(0, semi);
-							request.initBody(request.route->upload(), boundary);
-						}
-						else
-							request.initBody(request.route->upload());
+						sendErrorResponse(HttpStatus::Code(err));
+						return ;
 					}
-					else
-						request.initBody(request.route->upload());
-				}
-				const std::map<std::string, std::string> &hdrs = request.headers();
-				std::map<std::string, std::string>::const_iterator expIt = hdrs.find("expect");
-				if (expIt != hdrs.end() && expIt->second == "100-continue")
-				{
-					if (request.contentLength() > request.route->maxBodySize())
-					{
-						const std::string reject = "HTTP/1.1 417 Expectation Failed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-						send(socket.get(), reject.c_str(), reject.size(), 0);
-						return delete this;
-					}
-					const std::string cont = "HTTP/1.1 100 Continue\r\n\r\n";
-					send(socket.get(), cont.c_str(), cont.size(), 0);
 				}
 			}
-			request.parse(""); // resumes body parsing after max body size is set
+			request.parse("");
 			keepAlive = !request.connectionClose();
 		}
 
 		if (!request.complete())
 			return ;
-
-		if (request.route && !request.route->allowedMethods().empty()
-			&& std::find(request.route->allowedMethods().begin(), request.route->allowedMethods().end(), request.method()) == request.route->allowedMethods().end())
-		{
-			response = HttpPipeline::errorResponse(request, HttpStatus::MethodNotAllowed);
-			response.setHeader("Connection", keepAlive ? "keep-alive" : "close");
-			writeBuffer = response.serialize();
-			HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
-			reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
-			return ;
-		}
 
 		if (cgi)
 		{
@@ -139,10 +113,7 @@ void Client::onRead()
 	catch (const std::exception &e)
 	{
 		std::cerr << StringUtils::currentTime() << " [error] " << e.what() << "\n";
-		response	= HttpResponse::HttpErrorResponse(HttpStatus::InternalServerError);
-		writeBuffer	= response.serialize();
-		HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
-		reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
+		sendErrorResponse(HttpStatus::InternalServerError);
 	}
 }
 
@@ -151,23 +122,24 @@ void Client::onWrite()
 	// send headers / small body first
 	if (writeOffset < writeBuffer.size())
 	{
-		ssize_t sent = send(socket.get(), writeBuffer.c_str() + writeOffset, writeBuffer.size() - writeOffset, 0);
+		size_t	toSend	= std::min((size_t)CLIENT_SNDBUF_SIZE, writeBuffer.size() - writeOffset);
+		ssize_t	sent = send(socket.get(), writeBuffer.c_str() + writeOffset, toSend, 0);
 		if (sent <= 0)
 			return delete this;
 		writeOffset += sent;
-		if (writeOffset < writeBuffer.size())
-			return;
+		return ; // more chunks next POLLOUT
 	}
-
-	// stream file body in 4KB chunks
-	if (response.hasFile())
+	// stream file body (skipped for HEAD — headers already sent with correct Content-Length)
+	if (response.hasFile() && request.method() != "HEAD")
 	{
 		if (!fileStream_.is_open())
+		{
+			fileStream_.clear(); // C++98/libstdc++: open() doesn't clear eofbit on linux but on mac it does 🙂
 			fileStream_.open(response.filePath().c_str(), std::ios::binary);
-		if (!fileStream_.good())
-			return delete this;
-
-		char chunk[4096];
+			if (!fileStream_.good())
+				return delete this;
+		}
+		char chunk[CLIENT_SNDBUF_SIZE];
 		fileStream_.read(chunk, sizeof(chunk));
 		std::streamsize n = fileStream_.gcount();
 		if (n > 0)
@@ -175,23 +147,41 @@ void Client::onWrite()
 			ssize_t sent = send(socket.get(), chunk, n, 0);
 			if (sent <= 0)
 				return delete this;
-			return; // more chunks next POLLOUT
+			return ; // more chunks next POLLOUT
 		}
 		fileStream_.close();
 	}
-
 	// done
 	if (keepAlive)
 	{
 		request.reset();
-		request.parse("");
 		response.reset();
 		writeBuffer.clear();
 		writeOffset = 0;
+		draining_ = false;
 		reactor_.mod(*this, WAIT_FOR_CLIENT_DATA);
 	}
+	else if (draining_)// response sent but body still incoming (non async keep-alive client)
+		reactor_.mod(*this, WAIT_FOR_CLIENT_DATA);
 	else
 		delete this;
+}
+
+void Client::sendErrorResponse(HttpStatus::Code code)
+{
+	keepAlive = false;
+	response = HttpPipeline::errorResponse(request, code);
+	response.setHeader("Connection", "close");
+	writeBuffer = response.serialize();
+	HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
+	if (!request.complete())
+	{
+		// keep reading to drain body so kernel sends FIN not RST
+		draining_ = true;
+		reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+	}
+	else
+		reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
 }
 
 void Client::onCgiComplete()

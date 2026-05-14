@@ -24,18 +24,10 @@ static bool isValidMethod(const std::string &method)
 	return true;
 }
 
-static bool isSupportedMethod(const std::string &method)
-{
-	return method == "GET" || method == "POST" || method == "DELETE";
-}
-
 int validateMethod(const std::string &method)
 {
-	if (method.empty()
-	|| !isValidMethod(method))
+	if (method.empty() || !isValidMethod(method))
 		return BadRequest;
-	if (!isSupportedMethod(method))
-		return NotImplemented;
 	return VALID;
 }
 

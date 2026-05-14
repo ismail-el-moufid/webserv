@@ -2,7 +2,7 @@ NAME	= webserv
 
 
 CXX			= c++
-CXXFLAGS	= -std=c++98 -Wall -Wextra -Werror -fsanitize=address
+CXXFLAGS	= -std=c++98 -Wall -Wextra -Werror
 INCLUDES	= -I include
 PREFIX		= /usr/local
 USER_PREFIX	= $(HOME)/.local
@@ -22,6 +22,7 @@ SRCS			= src/main.cpp \
 				src/core/Pipe.cpp \
 				src/core/Socket.cpp \
 				src/http/HttpPipeline.cpp \
+				src/http/Session.cpp \
 				src/http/HttpRequest.cpp \
 				src/http/HttpRequestBody.cpp \
 				src/utils/HttpRequestBodyUtils.cpp \
@@ -41,7 +42,7 @@ CAN_WRITE	= $(shell [ -w $(PREFIX)/bin ] || [ -w $(PREFIX) ] && echo yes || echo
 ACTUAL_ROOT	= $(if $(filter yes,$(CAN_WRITE)),$(PREFIX),$(USER_PREFIX))
 TARGET_RULE	= $(if $(filter yes,$(CAN_WRITE)),install-sys,install-user)
 
-CXXFLAGS	+= -DInstallDir=\"$(ACTUAL_ROOT)\"
+CXXFLAGS	+= -DPREFIX=\"$(ACTUAL_ROOT)\"
 
 
 RESET	= $(shell tput sgr0 2>/dev/null)

@@ -27,14 +27,14 @@ static bool parseChunkSize(std::string &rawBuffer, size_t &bytesParsed, int &err
 	return true;
 }
 
-static bool appendChunk(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBody &body, int &errorCode, size_t maxBodySize, size_t chunkSize)
+static bool appendChunk(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBody &body, int &errorCode, size_t maxBodySize, bool maxBodySizeSet, size_t chunkSize)
 {
 	size_t chunkEnd = bytesParsed + chunkSize;
 
 	if (rawBuffer.size() < chunkEnd + 2)
 		return false;
 
-	if (body.size() + chunkSize > maxBodySize)
+	if (maxBodySizeSet && body.size() + chunkSize > maxBodySize)
 		return (errorCode = ContentTooLarge, false);
 
 	body += rawBuffer.substr(bytesParsed, chunkSize);
@@ -42,13 +42,13 @@ static bool appendChunk(std::string &rawBuffer, size_t &bytesParsed, HttpRequest
 	return true;
 }
 
-void parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBody &body, bool &complete, int &errorCode, size_t maxBodySize)
+void parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBody &body, bool &complete, int &errorCode, size_t maxBodySize, bool maxBodySizeSet)
 {
 	size_t localParsed = bytesParsed;
 	size_t chunkSize;
 
 	if (!parseChunkSize(rawBuffer, localParsed, errorCode, chunkSize))
-		return;
+		return ;
 
 	if (chunkSize == 0)
 	{
@@ -57,7 +57,7 @@ void parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBo
 		return ;
 	}
 
-	if (!appendChunk(rawBuffer, localParsed, body, errorCode, maxBodySize, chunkSize))
+	if (!appendChunk(rawBuffer, localParsed, body, errorCode, maxBodySize, maxBodySizeSet, chunkSize))
 		return ;
 
 	bytesParsed = localParsed;
@@ -69,10 +69,10 @@ void parseFixedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBody
 	size_t bytesToParse		= std::min(bytesAvailable, contentLength - body.size());
 
 	if (bytesToParse == 0)
-		return;
+		return ;
 
-	body += rawBuffer.substr(bytesParsed, bytesToParse);
-	bytesParsed += bytesToParse;
+	body		+= rawBuffer.substr(bytesParsed, bytesToParse);
+	bytesParsed	+= bytesToParse;
 
 	if (body.size() == contentLength)
 		complete = true;

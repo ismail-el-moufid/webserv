@@ -6,7 +6,19 @@
 #define REGISTERED(fd) ((fd) != -1 && (size_t)(fd) < fd_to_index_.size() && fd_to_index_.at(fd) != -1)
 
 IOReactor::IOReactor(time_t timeout) : fd_to_index_(10240, -1), timeout_(timeout) {}
-IOReactor::~IOReactor() {}
+
+IOReactor::~IOReactor()
+{
+	std::set<IPollable *> deleted;
+	for (size_t i = 0; i < pollables_.size(); ++i)
+	{
+		if (deleted.count(pollables_.at(i)) == 0)
+		{
+			deleted.insert(pollables_.at(i));
+			delete pollables_.at(i);
+		}
+	}
+}
 
 void IOReactor::add(int fd, int events, IPollable &pollable)
 {
@@ -107,11 +119,11 @@ void IOReactor::waitAndDispatch(int timeToWaitInMS)
 		for (size_t i = 0; i < ready_fds_.size(); ++i)
 		{
 			if (!REGISTERED(ready_fds_.at(i)))
-				continue;
+				continue ;
 
 			IPollable *pol = pollables_.at(fd_to_index_.at(ready_fds_.at(i)));
 
-			if (ready_revents_.at(i) & POLLIN)
+			if (ready_revents_.at(i) & (POLLIN | POLLERR | POLLHUP)) // POLLHUP is linux-specific, took some time 🙂 to find out about it
 				pol->onRead();
 
 			if (REGISTERED(ready_fds_.at(i)) && pollables_.at(fd_to_index_.at(ready_fds_.at(i))) == pol)
@@ -127,7 +139,7 @@ void IOReactor::waitAndDispatch(int timeToWaitInMS)
 	{
 		size_t current_idx = i - 1;
 		if (ready_set.count(pfds_.at(current_idx).fd))
-			continue;
+			continue ;
 
 		IPollable *pol = pollables_.at(current_idx);
 		if (now - pol->lastActive() > timeout_)

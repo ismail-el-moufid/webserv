@@ -13,6 +13,7 @@ namespace StringUtils
 	bool						isAllDigits(const std::string &s, size_t start = 0, size_t end = std::string::npos);
 	bool						hasInvalidChar(const std::string &s, const std::string &invalidChars, size_t from = 0);
 	std::vector<const char *>	toNullTerminatedCStrings(const std::vector<std::string> &stringVector);
+	std::string					uriBasename(const std::string &uriPath);
 
 	template <typename T>
 	std::string toString(const T &value)

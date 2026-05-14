@@ -47,7 +47,7 @@ bool HttpRequest::parseRequestLine()
 	return true;
 }
 
-int validateHeaders(const std::string &rawHeaderFields, bool complete, const std::string &version, size_t &contentLength, bool &chunked, std::string &host, bool &connectionClose, std::map<std::string, std::string> &parsed);
+int validateHeaders(const std::string &rawHeaderFields, bool complete, const std::string &version, size_t &contentLength, bool &chunked, std::string &host, bool &connectionClose, bool &expectsContinue, std::string &contentType, std::map<std::string, std::string> &parsed);
 
 bool HttpRequest::parseHeaders()
 {
@@ -68,7 +68,7 @@ bool HttpRequest::parseHeaders()
 	std::string rawHeaderFields = complete ? rawBuffer_.substr(bytesParsed_, headersEnd - bytesParsed_)
 								: rawBuffer_.substr(bytesParsed_);
 
-	if ((errorCode_ = validateHeaders(rawHeaderFields, complete, version_, contentLength_, chunked_, host_, connectionClose_, headers_))
+	if ((errorCode_ = validateHeaders(rawHeaderFields, complete, version_, contentLength_, chunked_, host_, connectionClose_, expectsContinue_, contentType_, headers_))
 		|| !complete)
 		return false;
 
@@ -84,14 +84,14 @@ bool HttpRequest::parseHeaders()
 }
 
 void parseFixedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBody &body, bool &complete, size_t contentLength);
-void parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBody &body, bool &complete, int &errorCode, size_t maxBodySize);
+void parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBody &body, bool &complete, int &errorCode, size_t maxBodySize, bool maxBodySizeSet);
 
 void HttpRequest::parseBody()
 {
 	if (chunked_)
 	{
 		while (!complete_)
-			parseChunkedBody(rawBuffer_, bytesParsed_, body_, complete_, errorCode_, maxBodySize_);
+			parseChunkedBody(rawBuffer_, bytesParsed_, body_, complete_, errorCode_, maxBodySize_, maxBodySizeSet_);
 		contentLength_ = body_.size();
 	}
 	else
@@ -115,9 +115,11 @@ void HttpRequest::parse(const std::string &rawBytes)
 	parseBody();
 }
 
-void HttpRequest::initBody(int fd)														{ body_.init(fd); }
-void HttpRequest::initBody(const std::string &uploadDir)								{ body_.init(uploadDir); }
-void HttpRequest::initBody(const std::string &uploadDir, const std::string &boundary)	{ body_.init(uploadDir, boundary); }
+void	HttpRequest::initBody(int fd)																{ body_.init(fd); }
+void	HttpRequest::initBodyRaw(const std::string &uploadDir)										{ body_.initRaw(uploadDir, errorCode_); }
+void	HttpRequest::initBodyMultipart(const std::string &uploadDir, const std::string &boundary)	{ body_.initMultipart(uploadDir, boundary, errorCode_); }
+void	HttpRequest::initBodyRaw(const std::string &uploadDir, const std::string &filename)			{ body_.initRaw(uploadDir, filename, errorCode_); }
+int		HttpRequest::drainBody()																	{ return body_.drain(); }
 
 void HttpRequest::URI::clear()
 {
@@ -154,6 +156,7 @@ void HttpRequest::reset()
 			rawBuffer_.clear();
 	}
 	bytesParsed_ = 0;
+	parse(""); // in case there is already data in rawBuffer_ (pipelined request)
 }
 
 bool HttpRequest::hasCgi() const
@@ -174,7 +177,7 @@ bool HttpRequest::hasCgi() const
 	return false;
 }
 
-HttpRequest::HttpRequest() : vhost(NULL), route(NULL), complete_(false), requestLineParsed_(false), headerParsed_(false), errorCode_(0), maxBodySize_(0), maxBodySizeSet_(false), bytesParsed_(0), contentLength_(0), chunked_(false), connectionClose_(true) { }
+HttpRequest::HttpRequest() : vhost(NULL), route(NULL), complete_(false), requestLineParsed_(false), headerParsed_(false), errorCode_(0), maxBodySizeSet_(false), bytesParsed_(0), contentLength_(0), chunked_(false), connectionClose_(true), expectsContinue_(false) { }
 
 void HttpRequest::setMaxBodySize(size_t maxBodySize) { maxBodySize_ = maxBodySize; maxBodySizeSet_ = true; }
 
@@ -189,3 +192,5 @@ const std::string							&HttpRequest::host()			const { return host_; }
 bool										HttpRequest::erroneous()		const { return errorCode_ != 0; }
 bool										HttpRequest::connectionClose()	const { return connectionClose_; }
 HttpStatus::Code							HttpRequest::errorCode()		const { return static_cast<Code>(errorCode_); }
+bool										HttpRequest::expectsContinue()	const { return expectsContinue_; }
+const std::string							&HttpRequest::contentType()		const { return contentType_; }

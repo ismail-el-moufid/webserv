@@ -45,7 +45,7 @@ static bool isChunkedEncoding(const std::string &transferEncoding)
 		if (!token.empty())
 			last = token;
 		if (comma == std::string::npos)
-			break;
+			break ;
 		pos = comma + 1;
 	}
 	return toLower(last) == "chunked";
@@ -63,7 +63,7 @@ static int validateHeaderFieldsFormat(const std::string &rawHeaderFields)
 	return VALID;
 }
 
-static int parseHeaderField(const std::string &line, bool &seenContentLength, size_t &contentLength, bool &chunked, std::string &host, bool &connectionClose, std::map<std::string, std::string> &parsed)
+static int parseHeaderField(const std::string &line, bool &seenContentLength, size_t &contentLength, bool &chunked, std::string &host, bool &connectionClose, bool &expectsContinue, std::string &contentType, std::map<std::string, std::string> &parsed)
 {
 	size_t colonPos = line.find(':');
 	if (colonPos == std::string::npos)
@@ -108,6 +108,10 @@ static int parseHeaderField(const std::string &line, bool &seenContentLength, si
 			pos = comma + 1;
 		}
 	}
+	else if (name == "expect")
+		expectsContinue = (value == "100-continue");
+	else if (name == "content-type")
+		contentType = value;
 	else if (name == "host")
 	{
 		static const std::string allowedSpecials = ".-_~!$&'()*+,;=%";
@@ -125,16 +129,16 @@ static int parseHeaderField(const std::string &line, bool &seenContentLength, si
 	return VALID;
 }
 
-static int validateBodyEncoding(const std::string &version, bool chunked, const std::map<std::string, std::string> &parsed)
+static int validateBodyEncoding(const std::string &version, bool chunked, std::string &host)
 {
 	if (chunked && version == "HTTP/1.0")
 		return BadRequest;
-	if (version == "HTTP/1.1" && parsed.find("host") == parsed.end())
+	if (version == "HTTP/1.1" && host.empty())
 		return BadRequest;
 	return VALID;
 }
 
-int validateHeaders(const std::string &rawHeaderFields, bool complete, const std::string &version, size_t &contentLength, bool &chunked, std::string &host, bool &connectionClose, std::map<std::string, std::string> &parsed)
+int validateHeaders(const std::string &rawHeaderFields, bool complete, const std::string &version, size_t &contentLength, bool &chunked, std::string &host, bool &connectionClose, bool &expectsContinue, std::string &contentType, std::map<std::string, std::string> &parsed)
 {
 	if (int result = validateHeaderFieldsFormat(rawHeaderFields))
 		return result;
@@ -151,13 +155,13 @@ int validateHeaders(const std::string &rawHeaderFields, bool complete, const std
 			? rawHeaderFields.substr(pos)
 			: rawHeaderFields.substr(pos, lineEnd - pos);
 
-		if (int result = parseHeaderField(line, seenContentLength, contentLength, chunked, host, connectionClose, parsed))
+			if (int result = parseHeaderField(line, seenContentLength, contentLength, chunked, host, connectionClose, expectsContinue, contentType, parsed))
 			return result;
 
 		if (lineEnd == std::string::npos)
-			break;
+			break ;
 		pos = lineEnd + 2;
 	}
 
-	return validateBodyEncoding(version, chunked, parsed);
+	return validateBodyEncoding(version, chunked, host);
 }

@@ -10,10 +10,15 @@ namespace HttpPipeline
 
 	void			resolve(HttpRequest &request, const ListenEndpoints &endpoints, const Interface &iface);
 
+	int				prepareUploadRequest(HttpRequest &request);
+
 	HttpResponse	buildResponse(const HttpRequest &request);
+	HttpResponse	uploadResponse(const HttpRequest &request);
 	HttpResponse	errorResponse(const HttpRequest &request, HttpStatus::Code code);
-	HttpResponse	buildResponseFromRaw(const HttpRequest &request, const std::string &rawOutput);
+	HttpResponse	buildResponseFromRaw(const HttpRequest &request, const std::string &raw);
 
 	void			logRequest(const HttpRequest &request, const HttpResponse &response, const Interface &iface, size_t bytesSent);
 
 };
+
+

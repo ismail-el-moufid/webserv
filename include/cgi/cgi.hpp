@@ -7,7 +7,6 @@
 
 #include <string>					// string
 #include <vector>					// vector
-#include <cstddef>					// size_t
 
 class Client;
 
@@ -29,9 +28,11 @@ public:
 	Pipe		stdinPipe;
 	Pipe		stdoutPipe;
 	pid_t		pid;
+
 	std::string	outputBuffer;
-	std::string	pendingBody;
-	size_t		bodyOffset;
+
+	// Session ID for this CGI process, used by CGIHandler::finish to apply session mutations to response cookies
+	std::string	sid;
 
 private:
 
@@ -55,7 +56,7 @@ public:
 
 private:
 
-	static std::vector<std::string>	buildEnv(const HttpRequest &request, const Interface &iface);
+	static std::vector<std::string>	buildEnv(const HttpRequest &request, const Interface &iface, std::string &sid);
 	static std::vector<std::string>	buildArg(const std::string &filename, const Route &route);
 	static std::string				resolveScript(const HttpRequest &request, std::vector<std::string> &env, const Route &route);
 

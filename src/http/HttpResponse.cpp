@@ -27,19 +27,21 @@ bool				HttpResponse::hasFile()												const	{ return !filePath_.empty(); }
 
 const std::string	&HttpResponse::filePath()											const	{ return filePath_; }
 
+void			HttpResponse::addCookie(const std::string &value)								{ cookies_.push_back(value); }
+
 std::string HttpResponse::serialize() const
 {
 	std::ostringstream ores;
 
-	// HTTP/1.1 responses to 1.0 requests are valid as long as we avoid 1.1-only features
 	ores << "HTTP/1.1 " << static_cast<int>(status_) << " " << HttpStatus::reasonPhrase(status_) << "\r\n";
 
-	// write headers
 	for (std::map<std::string, std::string>::const_iterator it = headers_.begin(); it != headers_.end(); ++it)
 		ores << it->first << ": " << it->second << "\r\n";
-	ores << "\r\n";
 
-	// write body
+	for (std::vector<std::string>::const_iterator it = cookies_.begin(); it != cookies_.end(); ++it)
+		ores << "Set-Cookie: " << *it << "\r\n";
+
+	ores << "\r\n";
 	ores << body_;
 	return ores.str();
 }
@@ -81,6 +83,7 @@ void HttpResponse::reset()
 {
 	status_ = HttpStatus::OK;
 	headers_.clear();
+	cookies_.clear();
 	init();
 	body_.clear();
 	filePath_.clear();

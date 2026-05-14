@@ -12,10 +12,13 @@ public:
 	~HttpRequestBody();
 
 	void init(int fd);
-	void init(const std::string &uploadDir, const std::string &boundary);	// multipart upload
-	void init(const std::string &uploadDir);								// raw upload
+	void initRaw(const std::string &uploadDir, int &errorCode);
+	void initRaw(const std::string &uploadDir, const std::string &filename, int &errorCode);
+	void initMultipart(const std::string &uploadDir, const std::string &boundary, int &errorCode);
 
 	HttpRequestBody &operator+=(const std::string &chunk);
+
+	int		drain();
 
 	size_t	size()	const;
 	bool	empty()	const;
@@ -31,6 +34,11 @@ private:
 	void processMultipart(const std::string &chunk);
 	void openFile(const std::string &partHeaders);
 
+	// pointer to HttpRequest's error code
+	int *errorCodePtr_;
+
+	bool errorOccurred_;
+
 	// pipe case
 	std::string	data_;
 
@@ -44,5 +52,6 @@ private:
 	// common between file and pipe case
 	size_t		size_;
 	int			fd_;
+	size_t		offset_;
 
 };

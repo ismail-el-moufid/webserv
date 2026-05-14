@@ -34,8 +34,6 @@ void Route::addErrorPage(const std::string &code, const std::string &page)
 
 void Route::addMethod(const std::string &method)
 {
-	if (method != "GET" && method != "POST" && method != "DELETE")
-		throw std::runtime_error(StringUtils::currentTime() + " [error] Invalid method: " + method);
 	allowedMethods_.push_back(method);
 }
 

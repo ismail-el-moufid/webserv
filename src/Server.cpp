@@ -3,7 +3,7 @@
 #include "utils/StringUtils.hpp"		// currentTime
 #include <iostream>						// cout
 
-Server::Server(const std::string &configPath) : timeout_(30), reactor_(NULL)
+Server::Server(const std::string &configPath, volatile sig_atomic_t &running) : running_(running), timeout_(30), reactor_(NULL)
 {
 	std::cout << StringUtils::currentTime() << " webserver starting\n";
 
@@ -23,7 +23,7 @@ Server::Server(const std::string &configPath) : timeout_(30), reactor_(NULL)
 		throw std::runtime_error(StringUtils::currentTime() + " [error] No listening sockets could be opened");
 }
 
-Server::Server() : timeout_(30), reactor_(NULL)
+Server::Server(volatile sig_atomic_t &running) : running_(running), timeout_(30), reactor_(NULL)
 {
 	std::cout << StringUtils::currentTime() << " webserver starting\n";
 
@@ -45,8 +45,8 @@ Server::Server() : timeout_(30), reactor_(NULL)
 
 void Server::run()
 {
-	while (true)
-		reactor_->waitAndDispatch(100);
+	while (running_)
+		reactor_->waitAndDispatch(1000);
 }
 
 Server::~Server() { delete reactor_; }

@@ -1,11 +1,12 @@
 #pragma once
 
-#ifndef InstallDir
-# define InstallDir "/usr/local"
+#ifndef PREFIX
+# define PREFIX "/usr/local"
 #endif
 
-#define DefaultConfig	InstallDir "/webserv/conf/webserv.conf"
-#define HtmlDir			InstallDir "/webserv/html"
+#define DefaultConfig	PREFIX "/webserv/conf/webserv.conf"
+#define HtmlDir			PREFIX "/webserv/html"
+#define SESSION_DIR		PREFIX "/webserv/sessions"
 
 #define SUPPORTED_CGI_EXTENSIONS { ".py", ".php" }
 
@@ -15,5 +16,9 @@
 
 #define CLIENT_READ_BUFFER_SIZE	(1 << 16)	// 64 KB
 #define CLIENT_RCVBUF_SIZE		(1 << 20)	// 1 MB
+
+#define CLIENT_SNDBUF_SIZE		(1 << 13)	// 8 KB
+
+#define SESSION_TIMEOUT			3			// senconds
 
 #define SERVER_SOFTWARE			"webserv/1.0"

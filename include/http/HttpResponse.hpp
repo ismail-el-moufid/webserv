@@ -3,6 +3,7 @@
 #include "http/HttpStatusCodes.hpp" // Code
 
 #include <string>					// string
+#include <vector>					// vector
 #include <map>						// map
 
 class HttpResponse
@@ -18,6 +19,7 @@ class HttpResponse
 		void setContentType(const std::string &type);
 		void setBody(const std::string &body);
 		void setFile(const std::string &path, size_t size);
+		void addCookie(const std::string &value);
 
 		bool				hasFile()	const;
 		const std::string	&filePath()	const;
@@ -37,6 +39,7 @@ class HttpResponse
 
 		HttpStatus::Code					status_;
 		std::map<std::string, std::string>	headers_;
+		std::vector<std::string>			cookies_;
 		std::string							body_;
 		std::string							filePath_;
 

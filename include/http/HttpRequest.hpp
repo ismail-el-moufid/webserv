@@ -32,10 +32,13 @@ public:
 
 	void parse(const std::string &rawBytes);
 
-	void setMaxBodySize(size_t maxBodySize);
-	void initBody(int fd);
-	void initBody(const std::string &uploadDir);
-	void initBody(const std::string &uploadDir, const std::string &boundary);
+	// post-header parsing methods
+	void	setMaxBodySize(size_t maxBodySize);
+	void	initBody(int fd);
+	void	initBodyRaw(const std::string &uploadDir);
+	void	initBodyRaw(const std::string &uploadDir, const std::string &filename);
+	void	initBodyMultipart(const std::string &uploadDir, const std::string &boundary);
+	int		drainBody();
 
 	void reset();
 
@@ -46,6 +49,8 @@ public:
 	const std::string							&version() const;
 	const std::map<std::string, std::string>	&headers() const;
 	const std::string							&host() const;
+	bool										expectsContinue() const;
+	const std::string							&contentType() const;
 	size_t										contentLength() const;
 	bool										hasCgi() const;
 	bool										erroneous() const;
@@ -78,6 +83,7 @@ private:
 	size_t	contentLength_;
 	bool	chunked_;
 	bool	connectionClose_;
+	bool	expectsContinue_;
 
 	// parsed data
 	std::string							rawBuffer_;
@@ -86,6 +92,7 @@ private:
 	std::string							version_;
 	std::map<std::string, std::string>	headers_;
 	std::string							host_;
+	std::string							contentType_;
 	HttpRequestBody						body_;
 
 };

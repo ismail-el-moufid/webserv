@@ -33,11 +33,10 @@ int ListeningSocket::writeFd()	const { return Socket::get(); }
 
 void ListeningSocket::onRead()
 {
-	int fd = accept(get(), NULL, NULL);
-
-	if (fd == -1)
-		return ;
-
-	try { reactor_.add(*new Client(fd, iface_, reactor_, endpoints_), POLLIN); }
-	catch (const std::exception &e) { std::cerr << StringUtils::currentTime() << " [error] " << e.what() << "\n"; }
+	int fd;
+	while ((fd = accept(get(), NULL, NULL)) != -1)
+	{
+		try { reactor_.add(*new Client(fd, iface_, reactor_, endpoints_), POLLIN); }
+		catch (const std::exception &e) { std::cerr << StringUtils::currentTime() << " [error] " << e.what() << "\n"; }
+	}
 }

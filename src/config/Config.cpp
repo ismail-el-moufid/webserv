@@ -65,12 +65,12 @@ void Config::tokenize(std::ifstream &configIfs)
 	{
 		switch (next)
 		{
-		case '\n': ++tokenStream_.currentTokenizationLine; tokenStream_.currentTokenizationColumn = 1;															configIfs.ignore(); break;
-		case ' ': case '\t': case '\r': ++tokenStream_.currentTokenizationColumn;																				configIfs.ignore(); break;
-		case '{': tokenStream_.push(TokenStream::Token::BlockOpen); ++tokenStream_.currentTokenizationColumn;												configIfs.ignore(); break;
-		case '}': tokenStream_.push(TokenStream::Token::BlockClose); ++tokenStream_.currentTokenizationColumn;											configIfs.ignore(); break;
-		case ';': tokenStream_.push(TokenStream::Token::DirectiveDelimiter); ++tokenStream_.currentTokenizationColumn;									configIfs.ignore(); break;
-		case '#': configIfs.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); tokenStream_.currentTokenizationColumn = 1; ++tokenStream_.currentTokenizationLine;	break;
+		case '\n': ++tokenStream_.currentTokenizationLine; tokenStream_.currentTokenizationColumn = 1;															configIfs.ignore(); break ;
+		case ' ': case '\t': case '\r': ++tokenStream_.currentTokenizationColumn;																				configIfs.ignore(); break ;
+		case '{': tokenStream_.push(TokenStream::Token::BlockOpen); ++tokenStream_.currentTokenizationColumn;												configIfs.ignore(); break ;
+		case '}': tokenStream_.push(TokenStream::Token::BlockClose); ++tokenStream_.currentTokenizationColumn;											configIfs.ignore(); break ;
+		case ';': tokenStream_.push(TokenStream::Token::DirectiveDelimiter); ++tokenStream_.currentTokenizationColumn;									configIfs.ignore(); break ;
+		case '#': configIfs.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); tokenStream_.currentTokenizationColumn = 1; ++tokenStream_.currentTokenizationLine;	break ;
 		case '"':
 			configIfs.ignore(); // skip opening quote
 			{
@@ -86,7 +86,7 @@ void Config::tokenize(std::ifstream &configIfs)
 					configIfs.ignore(); // skip closing quote
 				tokenStream_.push(word);
 			}
-			break;
+			break ;
 		default:
 			TokenStream::Token word;
 			word.line	= tokenStream_.currentTokenizationLine;
@@ -98,7 +98,7 @@ void Config::tokenize(std::ifstream &configIfs)
 				next = configIfs.peek();
 			}
 			tokenStream_.push(word);
-			break;
+			break ;
 		}
 	}
 }

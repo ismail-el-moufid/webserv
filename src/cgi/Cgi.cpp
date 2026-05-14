@@ -1,8 +1,9 @@
-#include "cgi/cgi.hpp"
+#include "cgi/Cgi.hpp"
 #include "config/Route.hpp"
 #include "core/Client.hpp"
 #include "core/IOReactor.hpp"
 #include "http/HttpPipeline.hpp"
+#include "http/Session.hpp"
 #include "utils/StringUtils.hpp"
 #include "Defaults.hpp"
 
@@ -14,16 +15,16 @@
 
 std::string CGIHandler::resolveScript(const HttpRequest &request, std::vector<std::string> &env, const Route &route)
 {
-	std::string path_part	= request.uri().path;
-	std::string query		= request.uri().query;
+	const std::string &path_part = request.uri().path;
 
-	env.push_back("QUERY_STRING=" + query);
+	env.push_back("QUERY_STRING=" + request.uri().query);
 
-	std::string script_name	= path_part;
-	size_t		dot_pos		= path_part.find('.');
-	if (dot_pos != std::string::npos)
+	// Strip path-info suffix and extract path-info env vars.
+	std::string script_name = path_part;
+	size_t dot = path_part.find('.');
+	if (dot != std::string::npos)
 	{
-		size_t path_info_slash = path_part.find('/', dot_pos);
+		size_t path_info_slash = path_part.find('/', dot);
 		if (path_info_slash != std::string::npos)
 		{
 			script_name				= path_part.substr(0, path_info_slash);
@@ -39,7 +40,7 @@ std::string CGIHandler::resolveScript(const HttpRequest &request, std::vector<st
 	return filename;
 }
 
-std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const Interface &iface)
+std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const Interface &iface, std::string &sid)
 {
 	std::vector<std::string> env;
 	env.push_back("REQUEST_METHOD=" + request.method());
@@ -81,20 +82,41 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 	env.push_back("SERVER_PORT=" + port);
 	env.push_back("REQUEST_URI=" + request.uri().uri);
 
+	std::map<std::string, std::string>::const_iterator cit = headers.find("cookie");
+	if (cit != headers.end())
+		sid = Session::parseSid(cit->second);
+	if (sid.empty())
+		sid = Session::generate();
+
+	std::map<std::string, std::string> sdata = Session::load(sid);
+	for (std::map<std::string, std::string>::const_iterator it = sdata.begin(); it != sdata.end(); ++it)
+	{
+		std::string key = it->first;
+		for (size_t idx = 0; idx < key.size(); ++idx)
+			key[idx] = std::toupper(static_cast<unsigned char>(key[idx]));
+		env.push_back("SESSION_" + key + "=" + it->second);
+	}
+
 	return env;
 }
 
 std::vector<std::string> CGIHandler::buildArg(const std::string &filename, const Route &route)
 {
-	size_t						dot_pos		= filename.rfind('.');
-	std::string					extention	= filename.substr(dot_pos);
 	std::vector<std::string>	arg;
+	size_t						dot_pos = filename.rfind('.');
+	if (dot_pos == std::string::npos)
+		return arg;
+
+	std::string extention = filename.substr(dot_pos);
 	std::map<std::string, std::string>::const_iterator it = route.cgis().find(extention);
+	if (it == route.cgis().end())
+		return arg;
+
 	arg.push_back(it->second);
 	arg.push_back(filename);
-	return(arg);
-}
 
+	return arg;
+}
 void CGIHandler::start(Client &client)
 {
 	char **arguments;
@@ -105,13 +127,19 @@ void CGIHandler::start(Client &client)
 	std::string	filename;
 
 	// Build the base environment
-	std::vector<std::string> environ = buildEnv(client.request, client.iface);
+	std::vector<std::string> environ = buildEnv(client.request, client.iface, cgi.sid);
 
 	// Resolve the script and finalize the environment BEFORE making pointers
 	filename = resolveScript(client.request, environ, *client.request.route);
 
 	// Create a persistent local variable for the arguments so the strings don't get destroyed!
 	std::vector<std::string> args_str = buildArg(filename, *client.request.route);
+	if (args_str.empty())
+	{
+		client.clearCgi();
+		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
+		return ;
+	}
 
 	// Now it is safe to create the C-string arrays
 	std::vector<const char *> env = StringUtils::toNullTerminatedCStrings(environ);
@@ -120,13 +148,13 @@ void CGIHandler::start(Client &client)
 	arguments	= const_cast<char**>(&arg[0]);
 	envm		= const_cast<char**>(&env[0]);
 
-	// Check if script exists before forking
-	if (access(filename.c_str(), F_OK) == -1)
+	// Check if script exists and interpreter is executable before forking
+	if (access(filename.c_str(), F_OK) == -1 || access(arguments[0], X_OK) == -1)
 	{
 		cgi.stdinPipe.closeRead();
 		cgi.stdinPipe.closeWrite();
 		cgi.stdoutPipe.closeWrite();
-		return;
+		return ;
 	}
 
 	switch (pid = fork())
@@ -140,9 +168,10 @@ void CGIHandler::start(Client &client)
 		dup2(cgi.stdinPipe.readFd(), STDIN_FILENO);
 		dup2(cgi.stdoutPipe.writeFd(), STDOUT_FILENO);
 		fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) & ~O_NONBLOCK); // clear the O_NONBLOCK the pipe inherited
-		if (chdir(filename.substr(0, filename.rfind('/')).c_str()) == -1) // Change to the script's directory to support relative includes and such
-			exit(1);
-		execve(arguments[0], arguments, envm);
+		if (chdir(filename.substr(0, filename.rfind('/')).c_str()) != -1) // Change to the script's directory to support relative includes and such
+			execve(arguments[0], arguments, envm);
+		close(cgi.stdinPipe.readFd());
+		close(cgi.stdoutPipe.writeFd());
 		exit(1);
 	default:
 		// Parent Process
@@ -151,21 +180,27 @@ void CGIHandler::start(Client &client)
 		cgi.pid = pid;
 	}
 }
+static std::string applySession(std::string &raw, const std::string &sid);
 
 void CGIHandler::finish(Client &client)
 {
 	int status;
 	CGIProcess &cgi = *client.cgi;
 
-	if (cgi.pid == -1) // We aborted early because the file didn't exist
+	if (cgi.pid == -1)
 	{
 		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::NotFound);
-		return;
+		return ;
 	}
 
 	waitpid(cgi.pid, &status, 0);
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+	{
+		std::string cookie = applySession(cgi.outputBuffer, cgi.sid);
 		client.response = HttpPipeline::buildResponseFromRaw(client.request, cgi.outputBuffer);
+		if (!cookie.empty())
+			client.response.addCookie(cookie);
+	}
 	else
 		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
 }
@@ -182,28 +217,13 @@ void CGIHandler::killProcess(Client &client)
 
 bool CGIHandler::writeStdin(Client &client)
 {
-	CGIProcess	&cgi		= *client.cgi;
-
-	size_t		remaining	= cgi.pendingBody.size() - cgi.bodyOffset;
-
-	if (remaining == 0)
-		return client.request.complete();
-
-	ssize_t written = write(cgi.stdinPipe.writeFd(), cgi.pendingBody.c_str() + cgi.bodyOffset, remaining);
-	if (written > 0)
+	int result = client.request.drainBody();
+	if (result == -1)
 	{
-		cgi.bodyOffset += written;
-		if (cgi.bodyOffset >= cgi.pendingBody.size())
-		{
-			cgi.pendingBody.clear();
-			cgi.bodyOffset = 0;
-			return client.request.complete();
-		}
-	}
-	else if (written == -1)
 		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
-
-	return false;
+		return true;
+	}
+	return result == 1 && client.request.complete();
 }
 
 bool CGIHandler::readStdout(Client &client)
@@ -223,9 +243,78 @@ bool CGIHandler::readStdout(Client &client)
 	return false;
 }
 
+static std::string applySession(std::string &raw, const std::string &sid)
+{
+	// Find the header block
+	size_t headerEnd = raw.find("\r\n\r\n");
+	size_t step = 4;
+	if (headerEnd == std::string::npos)
+	{
+		headerEnd = raw.find("\n\n");
+		step = 2;
+	}
+	if (headerEnd == std::string::npos)
+		return "";
+
+	std::string headers	= raw.substr(0, headerEnd);
+	std::string body	= raw.substr(headerEnd + step);
+
+	std::map<std::string, std::string> mutations;
+	bool destroy = false;
+	std::string cleaned;
+
+	size_t pos = 0;
+	while (pos <= headers.size())
+	{
+		size_t		nl		= headers.find('\n', pos);
+		std::string	line	= (nl == std::string::npos)
+							? headers.substr(pos)
+							: headers.substr(pos, nl - pos + 1);
+
+		std::string trimmed = line;
+		if (!trimmed.empty() && trimmed[trimmed.size() - 1] == '\n') trimmed.erase(trimmed.size() - 1);
+		if (!trimmed.empty() && trimmed[trimmed.size() - 1] == '\r') trimmed.erase(trimmed.size() - 1);
+
+		size_t colon = trimmed.find(':');
+		if (colon != std::string::npos && trimmed.substr(0, colon) == "X-Set-Session")
+		{
+			std::string val = StringUtils::trim(trimmed.substr(colon + 1));
+			size_t eq = val.find('=');
+			if (eq != std::string::npos)
+			{
+				std::string k = val.substr(0, eq);
+				std::string v = val.substr(eq + 1);
+				if (k == "__destroy" && v == "1")
+					destroy = true;
+				else
+					mutations[k] = v;
+			}
+		}
+		else
+			cleaned += line;
+
+		if (nl == std::string::npos)
+			break;
+		pos = nl + 1;
+	}
+
+	raw = cleaned + (step == 4 ? "\r\n\r\n" : "\n\n") + body;
+
+	if (destroy)
+	{
+		Session::destroy(sid);
+		return "sid=; Max-Age=0; Path=/";
+	}
+	std::map<std::string, std::string> sdata = Session::load(sid);
+	for (std::map<std::string, std::string>::const_iterator it = mutations.begin(); it != mutations.end(); ++it)
+		sdata[it->first] = it->second;
+	Session::save(sid, sdata);
+	return "sid=" + sid + "; Path=/";
+}
+
 #define CGI_READ_ONLY	POLLIN
 
-CGIProcess::CGIProcess(IOReactor &reactor, Client &client) : IPollable(reactor), pid(-1), bodyOffset(0), client_(&client) { }
+CGIProcess::CGIProcess(IOReactor &reactor, Client &client) : IPollable(reactor), pid(-1), client_(&client) { }
 
 CGIProcess::~CGIProcess() { reactor_.remove(*this); }
 
@@ -258,5 +347,5 @@ void CGIProcess::onTimeout()
 	client_->clearCgi();
 }
 
-int		CGIProcess::readFd()	const { return stdoutPipe.readFd(); }
-int		CGIProcess::writeFd()	const { return stdinPipe.writeFd(); }
+int CGIProcess::readFd()	const { return stdoutPipe.readFd(); }
+int CGIProcess::writeFd()	const { return stdinPipe.writeFd(); }

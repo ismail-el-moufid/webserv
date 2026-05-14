@@ -28,7 +28,7 @@ std::string normalizeSlashes(const std::string &target)
 {
 	std::string result;
 	for (size_t i = 0; i < target.size(); ++i)
-		if (target[i] != '/' || result.empty() || result.back() != '/')
+		if (target[i] != '/' || result.empty() || result[result.size() - 1] != '/')
 			result += target[i];
 	return result;
 }
@@ -64,6 +64,22 @@ std::string currentTime()
 	std::strftime(buf, sizeof(buf), "[%d/%b/%Y:%H:%M:%S %z]", std::localtime(&now));
 
 	return buf;
+}
+
+std::string uriBasename(const std::string &uriPath)
+{
+	std::string name = uriPath;
+	size_t dot = name.find('.');
+	if (dot != std::string::npos)
+	{
+		size_t slash = name.find('/', dot);
+		if (slash != std::string::npos)
+			name = name.substr(0, slash);
+	}
+	size_t last = name.rfind('/');
+	if (last != std::string::npos)
+		name = name.substr(last + 1);
+	return name;
 }
 
 }

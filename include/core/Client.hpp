@@ -6,7 +6,7 @@
 #include "config/Config.hpp"		// ListenEndpoints
 #include "core/Socket.hpp"			// Socket
 #include "http/HttpResponse.hpp"	// HttpResponse
-#include "cgi/cgi.hpp"				// CGIProcess
+#include "cgi/Cgi.hpp"				// CGIProcess
 
 #include <fstream>					// ifstream
 
@@ -30,6 +30,8 @@ public:
 
 	void clearCgi();
 
+	void sendErrorResponse(HttpStatus::Code code);
+
 	Socket		socket;
 	Interface	iface;
 
@@ -42,6 +44,7 @@ public:
 	size_t		writeOffset;
 
 	bool	keepAlive;
+	bool	draining_; // true when sending error response while body still incoming
 
 	CGIProcess *cgi; // allocated in Client::onRead(), deleted in CGIHandler::finish/kill and ~Client
 
