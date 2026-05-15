@@ -17,7 +17,7 @@ class Client : public IPollable
 
 public:
 
-	Client(int fd, const Interface &iface, IOReactor &reactor, const ListenEndpoints &endpoints);
+	Client(int fd, const Interface &listeningIface, const Interface &clientIface, IOReactor &reactor, const ListenEndpoints &endpoints);
 	~Client();
 
 	int	readFd() const;
@@ -31,9 +31,11 @@ public:
 	void clearCgi();
 
 	void sendErrorResponse(HttpStatus::Code code);
+	
+	Interface	listeningIface;
 
 	Socket		socket;
-	Interface	iface;
+	Interface	clientIface;
 
 	HttpRequest		request;
 	HttpResponse	response;

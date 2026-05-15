@@ -34,9 +34,10 @@ int ListeningSocket::writeFd()	const { return Socket::get(); }
 void ListeningSocket::onRead()
 {
 	int fd;
-	while ((fd = accept(get(), NULL, NULL)) != -1)
+	Interface clientIface;
+	while ((fd = accept(get(), reinterpret_cast<struct sockaddr *>(&clientIface.addr), &clientIface.addrlen)) != -1)
 	{
-		try { reactor_.add(*new Client(fd, iface_, reactor_, endpoints_), POLLIN); }
+		try { reactor_.add(*new Client(fd, iface_, clientIface, reactor_, endpoints_), POLLIN); }
 		catch (const std::exception &e) { std::cerr << StringUtils::currentTime() << " [error] " << e.what() << "\n"; }
 	}
 }

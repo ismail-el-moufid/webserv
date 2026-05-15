@@ -48,15 +48,15 @@ class CGIHandler
 
 public:
 
-	static int  start(Client &client);
-	static bool writeStdin(Client &client);
-	static bool readStdout(Client &client);
-	static void finish(Client &client);
-	static void killProcess(Client &client);
+	static int	start(Client &client);
+	static bool	writeStdin(Client &client);
+	static bool	readStdout(Client &client);
+	static void	finish(Client &client);
+	static void	killProcess(Client &client);
 
 private:
 
-	static std::vector<std::string>	buildEnv(const HttpRequest &request, const Interface &iface, std::string &sid);
+	static std::vector<std::string>	buildEnv(const HttpRequest &request, const Interface &listeningIface, const Interface &clientIface, std::string &sid);
 	static std::vector<std::string>	buildArg(const std::string &filename, const Route &route);
 	static std::string				resolveScript(const HttpRequest &request, std::vector<std::string> &env, const Route &route);
 

@@ -41,7 +41,7 @@ std::string CGIHandler::resolveScript(const HttpRequest &request, std::vector<st
 	return filename;
 }
 
-std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const Interface &iface, std::string &sid)
+std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const Interface &listeningIface, const Interface &clientIface, std::string &sid)
 {
 	std::vector<std::string> env;
 	env.push_back("REQUEST_METHOD=" + request.method());
@@ -70,19 +70,22 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 	env.push_back("REDIRECT_STATUS=200");
 	env.push_back("PATH=/usr/bin:/bin");
 
-	std::string serverName, ip, port;
-	NetworkUtils::extractIPPort(iface, ip, port);
+	std::string serverName, serverIp, serverPort, clientIp, clientPort;
+
+	NetworkUtils::extractIPPort(listeningIface, serverIp, serverPort);
+	NetworkUtils::extractIPPort(clientIface, clientIp, clientPort);
 	if (!request.host().empty())
 		serverName = request.host();
 	else if (request.vhost && !request.vhost->names().empty())
 		serverName = request.vhost->names().front();
 	else
-		serverName = ip;
+		serverName = serverIp;
 
 	env.push_back("SERVER_NAME=" + serverName);
-	env.push_back("REMOTE_ADDR=" + ip);
-	env.push_back("SERVER_PORT=" + port);
+	env.push_back("REMOTE_ADDR=" + clientIp);
+	env.push_back("SERVER_PORT=" + serverPort);
 	env.push_back("REQUEST_URI=" + request.uri().uri);
+
 
 	std::map<std::string, std::string>::const_iterator cit = headers.find("cookie");
 	if (cit != headers.end())
@@ -129,7 +132,7 @@ int CGIHandler::start(Client &client)
 	std::string	filename;
 
 	// Build the base environment
-	std::vector<std::string> environ = buildEnv(client.request, client.iface, cgi.sid);
+	std::vector<std::string> environ = buildEnv(client.request, client.listeningIface, client.clientIface, cgi.sid);
 
 	// Resolve the script and finalize the environment BEFORE making pointers
 	filename = resolveScript(client.request, environ, *client.request.route);
@@ -224,9 +227,7 @@ bool CGIHandler::readStdout(Client &client)
 		cgi.outputBuffer.append(buffer, bytes);
 	else if(bytes == 0)
 		return true;
-	else if (bytes == -1)
-		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
-
+	
 	return false;
 }
 

@@ -19,7 +19,7 @@
 #define WAIT_FOR_CGI				0
 #define CGI_IO						(POLLIN | POLLOUT)
 
-Client::Client(int fd, const Interface &iface, IOReactor &reactor, const ListenEndpoints &endpts) : IPollable(reactor), socket(fd), iface(iface), endpoints(endpts), writeOffset(0), keepAlive(false), draining_(false), cgi(NULL)
+Client::Client(int fd, const Interface &listeningIface, const Interface &clientIface, IOReactor &reactor, const ListenEndpoints &endpts) : IPollable(reactor), listeningIface(listeningIface), socket(fd), clientIface(clientIface), endpoints(endpts), writeOffset(0), keepAlive(false), draining_(false), cgi(NULL)
 {
 	int rcvbuf = CLIENT_RCVBUF_SIZE;
 	setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
@@ -61,7 +61,7 @@ void Client::onRead()
 
 		if (!request.vhost && request.headersComplete() && !request.erroneous())
 		{
-			HttpPipeline::resolve(request, endpoints, iface);
+			HttpPipeline::resolve(request, endpoints, listeningIface);
 			if (request.route)
 			{
 				request.setMaxBodySize(request.route->maxBodySize());
@@ -98,7 +98,7 @@ void Client::onRead()
 		response = HttpPipeline::buildResponse(request);
 		response.setHeader("Connection", keepAlive ? "keep-alive" : "close");
 		writeBuffer = response.serialize();
-		HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
+		HttpPipeline::logRequest(request, response, listeningIface, writeBuffer.size());
 		reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
 	}
 	catch (const std::exception &e)
@@ -164,7 +164,7 @@ void Client::sendErrorResponse(HttpStatus::Code code)
 	response = HttpPipeline::errorResponse(request, code);
 	response.setHeader("Connection", "close");
 	writeBuffer = response.serialize();
-	HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
+	HttpPipeline::logRequest(request, response, listeningIface, writeBuffer.size());
 	if (!request.complete())
 	{
 		// keep reading to drain body so kernel sends FIN not RST
@@ -179,7 +179,7 @@ void Client::onCgiComplete()
 {
 	updateActivity();
 	writeBuffer = response.serialize();
-	HttpPipeline::logRequest(request, response, iface, writeBuffer.size());
+	HttpPipeline::logRequest(request, response, listeningIface, writeBuffer.size());
 	reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
 }
 
