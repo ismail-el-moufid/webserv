@@ -48,7 +48,7 @@ class CGIHandler
 
 public:
 
-	static void start(Client &client);
+	static int  start(Client &client);
 	static bool writeStdin(Client &client);
 	static bool readStdout(Client &client);
 	static void finish(Client &client);

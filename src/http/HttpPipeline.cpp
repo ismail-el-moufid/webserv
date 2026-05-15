@@ -13,6 +13,7 @@
 #include <iostream>				// cout, ios, left
 #include <cstdlib>				// strtol
 #include <unistd.h>				// access
+
 namespace
 {
 
@@ -159,6 +160,33 @@ HttpResponse deleteResponse(const HttpRequest &request)
 		return HttpPipeline::errorResponse(request, HttpStatus::InternalServerError);
 }
 
+bool invalidRequest(const HttpRequest &request, HttpResponse &out, std::string *effectiveMethod = NULL)
+{
+	if (request.erroneous())
+		return (out = HttpPipeline::errorResponse(request, request.errorCode())), true;
+
+	if (!request.route)
+		return (out = HttpPipeline::errorResponse(request, HttpStatus::NotFound)), true;
+
+	if (request.route->maxBodySize() > 0 && request.contentLength() > request.route->maxBodySize())
+		return (out = HttpPipeline::errorResponse(request, HttpStatus::ContentTooLarge)), true;
+
+	// Redirects bypass method checking — a redirect is not a resource.
+	if (request.route->redirected())
+		return (out = HttpResponse::HttpResponseRedirect(request.route->redirectCode(), request.route->redirectPage())), true;
+
+	// Current implementation only allows HEAD for GET routes.
+	const std::string	&method		= request.method();
+	const std::string	effective	= (method == "HEAD") ? "GET" : method;
+	if (effectiveMethod)
+		*effectiveMethod = effective;
+
+	if (find(request.route->allowedMethods().begin(), request.route->allowedMethods().end(), effective) == request.route->allowedMethods().end())
+		return (out = HttpPipeline::errorResponse(request, HttpStatus::MethodNotAllowed)), true;
+
+	return false;
+}
+
 }
 
 namespace HttpPipeline
@@ -178,44 +206,79 @@ void resolve(HttpRequest &request, const ListenEndpoints &endpoints, const Inter
 
 HttpResponse buildResponse(const HttpRequest &request)
 {
-	if (request.erroneous())
-		return errorResponse(request, request.errorCode());
+	HttpResponse errorHappened;
+	std::string method;
+	if (invalidRequest(request, errorHappened, &method))
+		return errorHappened;
 
-	if (!request.route)
-		return errorResponse(request, HttpStatus::NotFound);
-
-	if (request.route->maxBodySize() > 0 && request.contentLength() > request.route->maxBodySize())
-		return errorResponse(request, HttpStatus::ContentTooLarge);
-
-	// Redirects bypass method checking — a redirect is not a resource.
-	if (request.route->redirected())
-		return HttpResponse::HttpResponseRedirect(request.route->redirectCode(), request.route->redirectPage());
-
-	// Current implementation only allows HEAD for GET routes
-	const std::string &method = request.method();
-	const std::string effectiveMethod = (method == "HEAD") ? "GET" : method;
-
-	if (find(request.route->allowedMethods().begin(), request.route->allowedMethods().end(), effectiveMethod) == request.route->allowedMethods().end())
-		return errorResponse(request, HttpStatus::MethodNotAllowed);
-
-	if (request.hasCgi())
-		return errorResponse(request, HttpStatus::InternalServerError);
-
-	if (!request.route->upload().empty() && (effectiveMethod == "POST" || effectiveMethod == "PUT"))
+	if (!request.route->upload().empty() && (method == "POST" || method == "PUT"))
 		return HttpResponse::HttpResponseBuilder(HttpStatus::Created, "{\"status\":\"ok\"}", "application/json");
 
-	if (effectiveMethod == "DELETE")
+	if (method == "DELETE")
 		return deleteResponse(request);
 
-	if (effectiveMethod == "GET")
+	if (method == "GET")
 	{
 		HttpResponse resp = staticResponse(request);
-		if (method == "HEAD" && !resp.hasFile())
+		if (request.method() == "HEAD" && !resp.hasFile())
 			resp.setBody("");
 		return resp;
 	}
 
 	return errorResponse(request, HttpStatus::NotImplemented);
+}
+
+HttpResponse buildResponse(const HttpRequest &request, const std::string &raw)
+{
+	HttpResponse errorHappened;
+	if (invalidRequest(request, errorHappened))
+		return errorHappened;
+
+	size_t headerEnd = raw.find("\r\n\r\n"), step = 4;
+
+	if (headerEnd == std::string::npos)
+	{
+		headerEnd	= raw.find("\n\n");
+		step		= 2;
+	}
+	if (headerEnd == std::string::npos)
+		return errorResponse(request, HttpStatus::InternalServerError);
+
+	std::istringstream	ss(raw.substr(0, headerEnd));
+	std::string			body = raw.substr(headerEnd + step);
+
+	HttpResponse	response;
+	std::string		line;
+
+	while (std::getline(ss, line))
+	{
+		if (!line.empty() && line[line.size() - 1] == '\r')
+			line.erase(line.size() - 1);
+		size_t colon = line.find(':');
+		if (colon == std::string::npos)
+			continue ;
+		std::string name	= StringUtils::trim(line.substr(0, colon));
+		std::string value	= StringUtils::trim(line.substr(colon + 1));
+		if (name == "Status")
+		{
+			char *end;
+			std::strtol(value.c_str(), &end, 10);
+			std::string code(value.c_str(), end - value.c_str());
+			response.setStatus(HttpStatus::isValidCode(code)
+				? HttpStatus::toCode(code)
+				: HttpStatus::InternalServerError);
+		}
+		else if (name == "Set-Cookie")
+			response.addCookie(value);
+		else
+			response.setHeader(name, value);
+	}
+
+	if (HttpStatus::isErrorCode(response.statusCode()) && body.empty())
+		return errorResponse(request, response.statusCode());
+
+	response.setBody(body);
+	return response;
 }
 
 void logRequest(const HttpRequest &request, const HttpResponse &response, const Interface &iface, size_t bytesSent)
@@ -281,55 +344,6 @@ int prepareUploadRequest(HttpRequest &request)
 	else
 		request.initBodyRaw(request.route->upload(), filename);
 	return 0;
-}
-
-HttpResponse buildResponseFromRaw(const HttpRequest &request, const std::string &raw)
-{
-	size_t headerEnd = raw.find("\r\n\r\n"), step = 4;
-
-	if (headerEnd == std::string::npos)
-	{
-		headerEnd	= raw.find("\n\n");
-		step		= 2;
-	}
-	if (headerEnd == std::string::npos)
-		return errorResponse(request, HttpStatus::InternalServerError);
-
-	std::istringstream ss(raw.substr(0, headerEnd));
-	std::string body = raw.substr(headerEnd + step);
-
-	HttpResponse response;
-	std::string line;
-
-	while (std::getline(ss, line))
-	{
-		if (!line.empty() && line[line.size() - 1] == '\r')
-			line.erase(line.size() - 1);
-		size_t colon = line.find(':');
-		if (colon == std::string::npos)
-			continue ;
-		std::string name	= StringUtils::trim(line.substr(0, colon));
-		std::string value	= StringUtils::trim(line.substr(colon + 1));
-		if (name == "Status")
-		{
-			char *end;
-			std::strtol(value.c_str(), &end, 10);
-			std::string code(value.c_str(), end - value.c_str());
-			response.setStatus(HttpStatus::isValidCode(code)
-				? HttpStatus::toCode(code)
-				: HttpStatus::InternalServerError);
-		}
-		else if (name == "Set-Cookie")
-			response.addCookie(value);
-		else
-			response.setHeader(name, value);
-	}
-
-	if (HttpStatus::isErrorCode(response.statusCode()) && body.empty())
-		return errorResponse(request, response.statusCode());
-
-	response.setBody(body);
-	return response;
 }
 
 }

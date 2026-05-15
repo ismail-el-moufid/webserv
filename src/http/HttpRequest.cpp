@@ -92,7 +92,11 @@ void HttpRequest::parseBody()
 	{
 		while (!complete_)
 			parseChunkedBody(rawBuffer_, bytesParsed_, body_, complete_, errorCode_, maxBodySize_, maxBodySizeSet_);
+		
+		// Normalize headers to reflect the decoded request, not the wire format
 		contentLength_ = body_.size();
+		headers_.erase("transfer-encoding");
+		headers_["content-length"] = StringUtils::toString(contentLength_);
 	}
 	else
 		parseFixedBody(rawBuffer_, bytesParsed_, body_, complete_, contentLength_);

@@ -3,6 +3,7 @@
 #include "core/Client.hpp"
 #include "core/IOReactor.hpp"
 #include "http/HttpPipeline.hpp"
+#include "http/HttpStatusCodes.hpp"
 #include "http/Session.hpp"
 #include "utils/StringUtils.hpp"
 #include "Defaults.hpp"
@@ -67,6 +68,7 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 	env.push_back("SERVER_SOFTWARE=" SERVER_SOFTWARE);
 	env.push_back("GATEWAY_INTERFACE=CGI/1.1");
 	env.push_back("REDIRECT_STATUS=200");
+	env.push_back("PATH=/usr/bin:/bin");
 
 	std::string serverName, ip, port;
 	NetworkUtils::extractIPPort(iface, ip, port);
@@ -117,7 +119,7 @@ std::vector<std::string> CGIHandler::buildArg(const std::string &filename, const
 
 	return arg;
 }
-void CGIHandler::start(Client &client)
+int CGIHandler::start(Client &client)
 {
 	char **arguments;
 	char **envm;
@@ -135,11 +137,7 @@ void CGIHandler::start(Client &client)
 	// Create a persistent local variable for the arguments so the strings don't get destroyed!
 	std::vector<std::string> args_str = buildArg(filename, *client.request.route);
 	if (args_str.empty())
-	{
-		client.clearCgi();
-		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
-		return ;
-	}
+		return HttpStatus::InternalServerError;
 
 	// Now it is safe to create the C-string arrays
 	std::vector<const char *> env = StringUtils::toNullTerminatedCStrings(environ);
@@ -149,25 +147,19 @@ void CGIHandler::start(Client &client)
 	envm		= const_cast<char**>(&env[0]);
 
 	// Check if script exists and interpreter is executable before forking
-	if (access(filename.c_str(), F_OK) == -1 || access(arguments[0], X_OK) == -1)
-	{
-		cgi.stdinPipe.closeRead();
-		cgi.stdinPipe.closeWrite();
-		cgi.stdoutPipe.closeWrite();
-		return ;
-	}
+	if (access(filename.c_str(), F_OK) == -1 || access(arguments[0], F_OK) == -1)
+		return HttpStatus::NotFound;
+	if (access(arguments[0], X_OK) == -1)
+		return HttpStatus::Forbidden;
 
 	switch (pid = fork())
 	{
 	case -1:
-		client.clearCgi();
-		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
-		return ;
+		return HttpStatus::InternalServerError;
 	case 0:
 		// Child Process
 		dup2(cgi.stdinPipe.readFd(), STDIN_FILENO);
 		dup2(cgi.stdoutPipe.writeFd(), STDOUT_FILENO);
-		fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) & ~O_NONBLOCK); // clear the O_NONBLOCK the pipe inherited
 		if (chdir(filename.substr(0, filename.rfind('/')).c_str()) != -1) // Change to the script's directory to support relative includes and such
 			execve(arguments[0], arguments, envm);
 		close(cgi.stdinPipe.readFd());
@@ -179,6 +171,7 @@ void CGIHandler::start(Client &client)
 		cgi.stdoutPipe.closeWrite();
 		cgi.pid = pid;
 	}
+	return 0;
 }
 static std::string applySession(std::string &raw, const std::string &sid);
 
@@ -187,17 +180,11 @@ void CGIHandler::finish(Client &client)
 	int status;
 	CGIProcess &cgi = *client.cgi;
 
-	if (cgi.pid == -1)
-	{
-		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::NotFound);
-		return ;
-	}
-
 	waitpid(cgi.pid, &status, 0);
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
 	{
 		std::string cookie = applySession(cgi.outputBuffer, cgi.sid);
-		client.response = HttpPipeline::buildResponseFromRaw(client.request, cgi.outputBuffer);
+		client.response = HttpPipeline::buildResponse(client.request, cgi.outputBuffer);
 		if (!cookie.empty())
 			client.response.addCookie(cookie);
 	}

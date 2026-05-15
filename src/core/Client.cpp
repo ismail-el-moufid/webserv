@@ -3,6 +3,7 @@
 #include "core/IOReactor.hpp"
 #include "cgi/Cgi.hpp"
 #include "http/HttpPipeline.hpp"
+#include "http/HttpStatusCodes.hpp"
 #include "utils/StringUtils.hpp"
 
 #include <ctime>
@@ -74,22 +75,15 @@ void Client::onRead()
 				if (request.hasCgi())
 				{
 					cgi = new CGIProcess(reactor_, *this);
-					CGIHandler::start(*this);
-					if (cgi)
-					{
-						reactor_.add(*cgi, CGI_IO);
-						request.initBody(cgi->writeFd());
-					}
+					request.initBody(cgi->writeFd());				// fd_ set ← pipes exist, no fork yet
+					request.parse("");						// body decoded, data_ filled
+					if (int err = CGIHandler::start(*this))	// fork
+						return (clearCgi(), sendErrorResponse(HttpStatus::Code(err)));
+					reactor_.add(*cgi, CGI_IO);
 				}
 				else if (!request.route->upload().empty() && (request.method() == "POST" || request.method() == "PUT"))
-				{
-					int err = HttpPipeline::prepareUploadRequest(request);
-					if (err)
-					{
-						sendErrorResponse(HttpStatus::Code(err));
-						return ;
-					}
-				}
+					if (int err = HttpPipeline::prepareUploadRequest(request))
+						return sendErrorResponse(HttpStatus::Code(err));
 			}
 			request.parse("");
 			keepAlive = !request.connectionClose();
@@ -99,10 +93,7 @@ void Client::onRead()
 			return ;
 
 		if (cgi)
-		{
-			reactor_.mod(*this, WAIT_FOR_CGI);
-			return ;
-		}
+			return reactor_.mod(*this, WAIT_FOR_CGI);
 
 		response = HttpPipeline::buildResponse(request);
 		response.setHeader("Connection", keepAlive ? "keep-alive" : "close");
