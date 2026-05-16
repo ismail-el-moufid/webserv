@@ -7,6 +7,7 @@
 
 #include <string>					// string
 #include <vector>					// vector
+#include <map>						// map
 
 class Client;
 
@@ -31,8 +32,16 @@ public:
 
 	std::string	outputBuffer;
 
-	// Session ID for this CGI process, used by CGIHandler::finish to apply session mutations to response cookies
-	std::string	sid;
+	enum sidSource
+	{ 
+		COOKIE,
+		GENERATED
+	};
+	
+	// Session ID and preloaded data for this CGI process
+	std::string							sid;
+	sidSource							sidSrc;
+	std::map<std::string, std::string>	sessionData;
 
 private:
 
@@ -56,7 +65,7 @@ public:
 
 private:
 
-	static std::vector<std::string>	buildEnv(const HttpRequest &request, const Interface &listeningIface, const Interface &clientIface, std::string &sid);
+	static std::vector<std::string>	buildEnv(const HttpRequest &request, const Interface &listeningIface, const Interface &clientIface, std::string &sid, CGIProcess::sidSource &sidSrc, std::map<std::string, std::string> &sessionData);
 	static std::vector<std::string>	buildArg(const std::string &filename, const Route &route);
 	static std::string				resolveScript(const HttpRequest &request, std::vector<std::string> &env, const Route &route);
 

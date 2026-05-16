@@ -41,7 +41,7 @@ std::string CGIHandler::resolveScript(const HttpRequest &request, std::vector<st
 	return filename;
 }
 
-std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const Interface &listeningIface, const Interface &clientIface, std::string &sid)
+std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const Interface &listeningIface, const Interface &clientIface, std::string &sid, CGIProcess::sidSource &sidSrc, std::map<std::string, std::string> &sessionData)
 {
 	std::vector<std::string> env;
 	env.push_back("REQUEST_METHOD=" + request.method());
@@ -89,12 +89,19 @@ std::vector<std::string> CGIHandler::buildEnv(const HttpRequest &request, const 
 
 	std::map<std::string, std::string>::const_iterator cit = headers.find("cookie");
 	if (cit != headers.end())
+	{
 		sid = Session::parseSid(cit->second);
-	if (sid.empty())
-		sid = Session::generate();
+		sidSrc = CGIProcess::COOKIE;
+	}
 
-	std::map<std::string, std::string> sdata = Session::load(sid);
-	for (std::map<std::string, std::string>::const_iterator it = sdata.begin(); it != sdata.end(); ++it)
+	sessionData = Session::load(sid);
+	if (sid.empty() || sessionData.empty())
+	{
+		sid		= Session::generate();
+		sidSrc	= CGIProcess::GENERATED;
+	}
+
+	for (std::map<std::string, std::string>::const_iterator it = sessionData.begin(); it != sessionData.end(); ++it)
 	{
 		std::string key = it->first;
 		for (size_t idx = 0; idx < key.size(); ++idx)
@@ -132,7 +139,7 @@ int CGIHandler::start(Client &client)
 	std::string	filename;
 
 	// Build the base environment
-	std::vector<std::string> environ = buildEnv(client.request, client.listeningIface, client.clientIface, cgi.sid);
+	std::vector<std::string> environ = buildEnv(client.request, client.listeningIface, client.clientIface, cgi.sid, cgi.sidSrc, cgi.sessionData);
 
 	// Resolve the script and finalize the environment BEFORE making pointers
 	filename = resolveScript(client.request, environ, *client.request.route);
@@ -178,7 +185,8 @@ int CGIHandler::start(Client &client)
 	}
 	return 0;
 }
-static std::string applySession(std::string &raw, const std::string &sid);
+
+static std::string applySession(std::string &raw, const std::string &sid, std::map<std::string, std::string> &sessionData);
 
 void CGIHandler::finish(Client &client)
 {
@@ -188,9 +196,9 @@ void CGIHandler::finish(Client &client)
 	waitpid(cgi.pid, &status, 0);
 	if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
 	{
-		std::string cookie = applySession(cgi.outputBuffer, cgi.sid);
+		std::string cookie = applySession(cgi.outputBuffer, cgi.sid, cgi.sessionData);
 		client.response = HttpPipeline::buildResponse(client.request, cgi.outputBuffer);
-		if (!cookie.empty())
+		if (!cookie.empty() && cgi.sidSrc == CGIProcess::GENERATED)
 			client.response.addCookie(cookie);
 	}
 	else
@@ -233,7 +241,7 @@ bool CGIHandler::readStdout(Client &client)
 	return false;
 }
 
-static std::string applySession(std::string &raw, const std::string &sid)
+static std::string applySession(std::string &raw, const std::string &sid, std::map<std::string, std::string> &sessionData)
 {
 	// Find the header block
 	size_t headerEnd = raw.find("\r\n\r\n");
@@ -250,7 +258,6 @@ static std::string applySession(std::string &raw, const std::string &sid)
 	std::string body	= raw.substr(headerEnd + step);
 
 	std::map<std::string, std::string> mutations;
-	bool destroy = false;
 	std::string cleaned;
 
 	size_t pos = 0;
@@ -262,8 +269,11 @@ static std::string applySession(std::string &raw, const std::string &sid)
 							: headers.substr(pos, nl - pos + 1);
 
 		std::string trimmed = line;
-		if (!trimmed.empty() && trimmed[trimmed.size() - 1] == '\n') trimmed.erase(trimmed.size() - 1);
-		if (!trimmed.empty() && trimmed[trimmed.size() - 1] == '\r') trimmed.erase(trimmed.size() - 1);
+		if (!trimmed.empty() && trimmed[trimmed.size() - 1] == '\n')
+			trimmed.erase(trimmed.size() - 1);
+
+		if (!trimmed.empty() && trimmed[trimmed.size() - 1] == '\r')
+			trimmed.erase(trimmed.size() - 1);
 
 		size_t colon = trimmed.find(':');
 		if (colon != std::string::npos && trimmed.substr(0, colon) == "X-Set-Session")
@@ -272,12 +282,10 @@ static std::string applySession(std::string &raw, const std::string &sid)
 			size_t eq = val.find('=');
 			if (eq != std::string::npos)
 			{
-				std::string k = val.substr(0, eq);
-				std::string v = val.substr(eq + 1);
-				if (k == "__destroy" && v == "1")
-					destroy = true;
-				else
-					mutations[k] = v;
+				std::string key		= val.substr(0, eq);
+				std::string value	= val.substr(eq + 1);
+
+				mutations[key] = value;
 			}
 		}
 		else
@@ -290,15 +298,9 @@ static std::string applySession(std::string &raw, const std::string &sid)
 
 	raw = cleaned + (step == 4 ? "\r\n\r\n" : "\n\n") + body;
 
-	if (destroy)
-	{
-		Session::destroy(sid);
-		return "sid=; Max-Age=0; Path=/";
-	}
-	std::map<std::string, std::string> sdata = Session::load(sid);
 	for (std::map<std::string, std::string>::const_iterator it = mutations.begin(); it != mutations.end(); ++it)
-		sdata[it->first] = it->second;
-	Session::save(sid, sdata);
+		sessionData[it->first] = it->second;
+	Session::save(sid, sessionData);
 	return "sid=" + sid + "; Path=/";
 }
 
