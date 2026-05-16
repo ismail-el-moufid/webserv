@@ -90,8 +90,7 @@ void HttpRequest::parseBody()
 {
 	if (chunked_)
 	{
-		while (!complete_)
-			parseChunkedBody(rawBuffer_, bytesParsed_, body_, complete_, errorCode_, maxBodySize_, maxBodySizeSet_);
+		parseChunkedBody(rawBuffer_, bytesParsed_, body_, complete_, errorCode_, maxBodySize_, maxBodySizeSet_);
 		
 		// Normalize headers to reflect the decoded request, not the wire format
 		contentLength_ = body_.size();

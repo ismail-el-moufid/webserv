@@ -47,6 +47,8 @@ void parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBo
 	size_t localParsed = bytesParsed;
 	size_t chunkSize;
 
+	while (localParsed < rawBuffer.size())
+	{
 	if (!parseChunkSize(rawBuffer, localParsed, errorCode, chunkSize))
 		return ;
 
@@ -59,6 +61,7 @@ void parseChunkedBody(std::string &rawBuffer, size_t &bytesParsed, HttpRequestBo
 
 	if (!appendChunk(rawBuffer, localParsed, body, errorCode, maxBodySize, maxBodySizeSet, chunkSize))
 		return ;
+	}
 
 	bytesParsed = localParsed;
 }

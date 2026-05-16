@@ -140,8 +140,12 @@ HttpResponse deleteResponse(const HttpRequest &request)
 	std::string root = request.route->root();
 	if (!root.empty() && root[root.size() - 1] == '/')
 		root.erase(root.size() - 1);
-	std::string path = root + request.uri().path;
 
+	std::string filename = request.uri().path;
+	size_t slash = filename.find_last_of("/\\");
+	if (slash != std::string::npos)
+		filename = filename.substr(slash + 1);
+	std::string path = root + "/" + filename;
 	struct stat path_stat;
 
 	if (stat(path.c_str(), &path_stat) != 0)
@@ -211,8 +215,9 @@ HttpResponse buildResponse(const HttpRequest &request)
 	if (invalidRequest(request, errorHappened, &method))
 		return errorHappened;
 
-	if (!request.route->upload().empty() && (method == "POST" || method == "PUT"))
+	if (!request.route->upload().empty() && (method == "POST" || method == "PUT")) {
 		return HttpResponse::HttpResponseBuilder(HttpStatus::Created, "{\"status\":\"ok\"}", "application/json");
+	}
 
 	if (method == "DELETE")
 		return deleteResponse(request);

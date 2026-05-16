@@ -32,7 +32,6 @@ void			HttpResponse::addCookie(const std::string &value)								{ cookies_.push_
 std::string HttpResponse::serialize() const
 {
 	std::ostringstream ores;
-
 	ores << "HTTP/1.1 " << static_cast<int>(status_) << " " << HttpStatus::reasonPhrase(status_) << "\r\n";
 
 	for (std::map<std::string, std::string>::const_iterator it = headers_.begin(); it != headers_.end(); ++it)
