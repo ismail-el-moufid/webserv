@@ -145,9 +145,10 @@ HttpResponse deleteResponse(const HttpRequest &request)
 	size_t slash = filename.find_last_of("/\\");
 	if (slash != std::string::npos)
 		filename = filename.substr(slash + 1);
-	std::string path = root + "/" + filename;
+	std::string path = root + request.route->path() + "/" + filename;
 	struct stat path_stat;
 
+	std::cout << "path: " << path << std::endl;
 	if (stat(path.c_str(), &path_stat) != 0)
 		return HttpPipeline::errorResponse(request, HttpStatus::NotFound);
 	if (S_ISDIR(path_stat.st_mode))
