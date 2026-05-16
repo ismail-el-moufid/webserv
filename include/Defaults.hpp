@@ -14,11 +14,11 @@
 #define MAX_HEADER_SIZE			(1 << 14)	// 16KB
 #define MAX_URI_SIZE			(MAX_REQUEST_LINE_SIZE - 15)
 
-#define CLIENT_READ_BUFFER_SIZE	(1 << 16)	// 64 KB
-#define CLIENT_RCVBUF_SIZE		(1 << 20)	// 1 MB
+#define CLIENT_READ_BUFFER_SIZE	(1 << 16)	// 64KB
+#define CLIENT_RCVBUF_SIZE		(1 << 20)	// 1MB
 
-#define CLIENT_SNDBUF_SIZE		(1 << 13)	// 8 KB
+#define CLIENT_SNDBUF_SIZE		(1 << 13)	// 8KB
 
-#define SESSION_TIMEOUT			3			// senconds
+#define SESSION_TIMEOUT			60			// seconds
 
 #define SERVER_SOFTWARE			"webserv/1.0"

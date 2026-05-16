@@ -163,6 +163,8 @@ int CGIHandler::start(Client &client)
 		// Child Process
 		dup2(cgi.stdinPipe.readFd(), STDIN_FILENO);
 		dup2(cgi.stdoutPipe.writeFd(), STDOUT_FILENO);
+		// restore pipe fd flags to default ( O_nonblock was set in the parent )
+		fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) & ~O_NONBLOCK);
 		if (chdir(filename.substr(0, filename.rfind('/')).c_str()) != -1) // Change to the script's directory to support relative includes and such
 			execve(arguments[0], arguments, envm);
 		close(cgi.stdinPipe.readFd());

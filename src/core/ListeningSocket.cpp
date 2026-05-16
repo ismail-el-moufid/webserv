@@ -35,6 +35,7 @@ void ListeningSocket::onRead()
 {
 	int fd;
 	Interface clientIface;
+	clientIface.addrlen = sizeof(clientIface.addr);
 	while ((fd = accept(get(), reinterpret_cast<struct sockaddr *>(&clientIface.addr), &clientIface.addrlen)) != -1)
 	{
 		try { reactor_.add(*new Client(fd, iface_, clientIface, reactor_, endpoints_), POLLIN); }
