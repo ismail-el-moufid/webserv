@@ -20,7 +20,10 @@ Server::Server(const std::string &configPath, volatile sig_atomic_t &running) : 
 	}
 
 	if (reactor_->empty())
+	{
+		delete reactor_;
 		throw std::runtime_error(StringUtils::currentTime() + " [error] No listening sockets could be opened");
+	}
 }
 
 Server::Server(volatile sig_atomic_t &running) : running_(running), timeout_(30), reactor_(NULL)
@@ -40,7 +43,10 @@ Server::Server(volatile sig_atomic_t &running) : running_(running), timeout_(30)
 	}
 
 	if (reactor_->empty())
+	{
+		delete reactor_;
 		throw std::runtime_error(StringUtils::currentTime() + " [error] No listening sockets could be opened");
+	}
 }
 
 void Server::run()
