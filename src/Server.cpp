@@ -3,15 +3,15 @@
 #include "utils/StringUtils.hpp"		// currentTime
 #include <iostream>						// cout
 
-Server::Server(const std::string &configPath, volatile sig_atomic_t &running) : running_(running), timeout_(30), reactor_(NULL)
+Server::Server(const std::string &configPath, volatile sig_atomic_t &running) : running_(running), inactiveTimeout_(30), reactor_(NULL)
 {
 	std::cout << StringUtils::currentTime() << " webserver starting\n";
 
 	{
-		Config config(configPath, vhosts_, endpoints_, timeout_);
+		Config config(configPath, vhosts_, endpoints_, inactiveTimeout_);
 	}
 
-	reactor_ = new IOReactor(timeout_);
+	reactor_ = new IOReactor(inactiveTimeout_);
 
 	for (ListenEndpoints::const_iterator it = endpoints_.begin(); it != endpoints_.end(); ++it)
 	{
@@ -26,15 +26,15 @@ Server::Server(const std::string &configPath, volatile sig_atomic_t &running) : 
 	}
 }
 
-Server::Server(volatile sig_atomic_t &running) : running_(running), timeout_(30), reactor_(NULL)
+Server::Server(volatile sig_atomic_t &running) : running_(running), inactiveTimeout_(30), reactor_(NULL)
 {
 	std::cout << StringUtils::currentTime() << " webserver starting\n";
 
 	{
-		Config config(vhosts_, endpoints_, timeout_);
+		Config config(vhosts_, endpoints_, inactiveTimeout_);
 	}
 
-	reactor_ = new IOReactor(timeout_);
+	reactor_ = new IOReactor(inactiveTimeout_);
 
 	for (ListenEndpoints::const_iterator it = endpoints_.begin(); it != endpoints_.end(); ++it)
 	{
@@ -53,6 +53,11 @@ void Server::run()
 {
 	while (running_)
 		reactor_->waitAndDispatch(1000);
+	std::cout << StringUtils::currentTime() << " webserver shutting down, sending responses to active clients and closing connections\n";
 }
 
-Server::~Server() { delete reactor_; }
+Server::~Server()
+{
+	delete reactor_;
+	std::cout << StringUtils::currentTime() << " webserver stopped\n";
+}

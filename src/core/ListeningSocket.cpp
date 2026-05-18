@@ -42,3 +42,9 @@ void ListeningSocket::onRead()
 		catch (const std::exception &e) { std::cerr << StringUtils::currentTime() << " [error] " << e.what() << "\n"; }
 	}
 }
+
+void ListeningSocket::onShutdown()
+{
+	reactor_.remove(*this);
+	delete this;
+}

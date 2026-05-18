@@ -205,14 +205,14 @@ void CGIHandler::finish(Client &client)
 		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::InternalServerError);
 }
 
-void CGIHandler::killProcess(Client &client)
+void CGIHandler::killProcess(Client &client, int code)
 {
 	int status;
-	CGIProcess &cgi = *client.cgi;
 
-	kill(cgi.pid, SIGKILL);
-	waitpid(cgi.pid, &status, 0);
-	client.response = HttpPipeline::errorResponse(client.request, HttpStatus::GatewayTimeout);
+	kill(client.cgi->pid, SIGKILL);
+	waitpid(client.cgi->pid, &status, 0);
+	if (code != -1)
+		client.response = HttpPipeline::errorResponse(client.request, HttpStatus::Code(code));
 }
 
 bool CGIHandler::writeStdin(Client &client)
@@ -327,16 +327,14 @@ void CGIProcess::onRead()
 		CGIHandler::finish(*client_);
 		reactor_.remove(*this);
 		client_->onCgiComplete();
-		client_->clearCgi();
 	}
 }
 
 void CGIProcess::onTimeout()
 {
-	CGIHandler::killProcess(*client_);
+	CGIHandler::killProcess(*client_, HttpStatus::GatewayTimeout);
 	reactor_.remove(*this);
 	client_->onCgiComplete();
-	client_->clearCgi();
 }
 
 int CGIProcess::readFd()	const { return stdoutPipe.readFd(); }

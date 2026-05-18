@@ -1,7 +1,9 @@
 #include "http/Session.hpp"
 #include "Defaults.hpp"
+#include "utils/StringUtils.hpp"
 
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <iomanip>
 #include <ctime>
@@ -94,7 +96,10 @@ std::map<std::string, std::string> load(const std::string &sid)
 
 	std::ifstream f((std::string(SESSION_DIR) + "/" + sid).c_str());
 	if (!f)
+	{
+		std::cerr << StringUtils::currentTime() << " [warn] session: cannot read session file, creating a new session\n";
 		return data;
+	}
 
 	std::string line;
 	std::string last_seen_str;
@@ -152,7 +157,11 @@ void save(const std::string &sid, const std::map<std::string, std::string> &data
 
 	std::ofstream f((std::string(SESSION_DIR) + "/" + sid).c_str());
 	if (!f)
-		return;
+	{
+		std::cerr << StringUtils::currentTime() << " [warn] session: cannot write to "
+				<< SESSION_DIR << " (check directory exists and permissions), session data will not be saved\n";
+		return ;
+	}
 
 	if (created.empty())
 	{

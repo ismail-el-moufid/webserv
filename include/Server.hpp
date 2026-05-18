@@ -23,7 +23,7 @@ private:
 	Server &operator=(Server &);
 
 	volatile sig_atomic_t	&running_;
-	time_t					timeout_;
+	time_t					inactiveTimeout_;
 	ListenEndpoints			endpoints_;
 	VirtualHosts			vhosts_;
 	IOReactor				*reactor_;

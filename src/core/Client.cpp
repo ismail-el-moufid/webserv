@@ -25,20 +25,53 @@ Client::Client(int fd, const Interface &listeningIface, const Interface &clientI
 	setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
 }
 
+void Client::onTimeout()
+{
+	delete this;
+}
+
+// Client
+void Client::onShutdown()
+{
+	if (cgi)
+	{
+		CGIHandler::killProcess(*this, HttpStatus::ServiceUnavailable);
+		clearCgi();
+		keepAlive = false;
+		beginResponse();
+		return;
+	}
+	delete this;
+}
+
 Client::~Client()
 {
 	if (cgi)
 	{
-		CGIHandler::killProcess(*this);
-		reactor_.remove(*cgi);
-		delete cgi;
-		cgi = NULL;
+		CGIHandler::killProcess(*this, HttpStatus::ServiceUnavailable);
+		clearCgi();
 	}
 	reactor_.remove(*this);
 }
 
 int Client::readFd()	const { return socket.get(); }
 int Client::writeFd()	const { return socket.get(); }
+
+
+void Client::beginResponse()
+{
+	response.setHeader("Connection", keepAlive ? "keep-alive" : "close");
+	writeBuffer = response.serialize();
+	writeOffset = 0;
+	HttpPipeline::logRequest(request, response, listeningIface, writeBuffer.size());
+	if (draining_ || !request.complete())
+	{
+		draining_ = true;
+		reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+	}
+	else
+		reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
+}
 
 void Client::onRead()
 {
@@ -96,10 +129,7 @@ void Client::onRead()
 			return reactor_.mod(*this, WAIT_FOR_CGI);
 
 		response = HttpPipeline::buildResponse(request);
-		response.setHeader("Connection", keepAlive ? "keep-alive" : "close");
-		writeBuffer = response.serialize();
-		HttpPipeline::logRequest(request, response, listeningIface, writeBuffer.size());
-		reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
+		beginResponse();
 	}
 	catch (const std::exception &e)
 	{
@@ -161,32 +191,21 @@ void Client::onWrite()
 void Client::sendErrorResponse(HttpStatus::Code code)
 {
 	keepAlive = false;
-	response = HttpPipeline::errorResponse(request, code);
-	response.setHeader("Connection", "close");
-	writeBuffer = response.serialize();
-	HttpPipeline::logRequest(request, response, listeningIface, writeBuffer.size());
-	if (!request.complete())
-	{
-		// keep reading to drain body so kernel sends FIN not RST
-		draining_ = true;
-		reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
-	}
-	else
-		reactor_.mod(*this, WAIT_TO_SEND_RESPONSE);
+	response  = HttpPipeline::errorResponse(request, code);
+	beginResponse();
 }
 
 void Client::onCgiComplete()
 {
+	clearCgi();
 	updateActivity();
-	writeBuffer = response.serialize();
-	HttpPipeline::logRequest(request, response, listeningIface, writeBuffer.size());
-	reactor_.mod(*this, WAIT_FOR_CLIENT_AND_SEND);
+	beginResponse();
 }
 
 void Client::clearCgi()
 {
+	if (!cgi) return;
+	reactor_.remove(*cgi);
 	delete cgi;
 	cgi = NULL;
 }
-
-void Client::onTimeout() { delete this; }

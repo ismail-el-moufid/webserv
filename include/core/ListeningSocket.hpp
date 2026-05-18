@@ -17,6 +17,7 @@ public:
 	int	writeFd() const;
 
 	void onRead();
+	void onShutdown();
 
 private:
 

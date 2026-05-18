@@ -2,13 +2,23 @@
 
 #include <cstddef>
 #include <set>
+#include <algorithm>
 
 #define REGISTERED(fd) ((fd) != -1 && (size_t)(fd) < fd_to_index_.size() && fd_to_index_.at(fd) != -1)
 
-IOReactor::IOReactor(time_t timeout) : fd_to_index_(10240, -1), timeout_(timeout) {}
+IOReactor::IOReactor(time_t timeout) : fd_to_index_(10240, -1), inactiveTimeout_(timeout) {}
 
 IOReactor::~IOReactor()
 {
+	std::vector<IPollable *> snapshot(pollables_.begin(), pollables_.end());
+	for (size_t i = 0; i < snapshot.size(); ++i)
+		if (std::find(pollables_.begin(), pollables_.end(), snapshot[i]) != pollables_.end())
+			snapshot[i]->onShutdown();
+
+	time_t deadline = time(NULL) + 5;
+	while (!empty() && time(NULL) < deadline)
+		waitAndDispatch(100);
+
 	std::set<IPollable *> deleted;
 	for (size_t i = 0; i < pollables_.size(); ++i)
 	{
@@ -100,7 +110,7 @@ void IOReactor::remove(IPollable &pollable)
 		remove(pollable.writeFd());
 }
 
-void IOReactor::waitAndDispatch(int timeToWaitInMS)
+void IOReactor::waitAndDispatch(int timeToWaitInMS, time_t inactiveTimeout)
 {
 	ready_revents_.clear();
 	ready_fds_.clear();
@@ -132,8 +142,8 @@ void IOReactor::waitAndDispatch(int timeToWaitInMS)
 		}
 	}
 
+	time_t effectiveTimeout = (inactiveTimeout >= 0) ? inactiveTimeout : inactiveTimeout_;
 	std::set<int> ready_set(ready_fds_.begin(), ready_fds_.end());
-
 	time_t now = time(NULL);
 	for (size_t i = pfds_.size(); i > 0; --i)
 	{
@@ -142,7 +152,7 @@ void IOReactor::waitAndDispatch(int timeToWaitInMS)
 			continue ;
 
 		IPollable *pol = pollables_.at(current_idx);
-		if (now - pol->lastActive() > timeout_)
+		if (now - pol->lastActive() > effectiveTimeout)
 			pol->onTimeout();
 	}
 }

@@ -148,7 +148,6 @@ HttpResponse deleteResponse(const HttpRequest &request)
 	std::string path = root + request.route->path() + "/" + filename;
 	struct stat path_stat;
 
-	std::cout << "path: " << path << std::endl;
 	if (stat(path.c_str(), &path_stat) != 0)
 		return HttpPipeline::errorResponse(request, HttpStatus::NotFound);
 	if (S_ISDIR(path_stat.st_mode))
@@ -340,15 +339,15 @@ int prepareUploadRequest(HttpRequest &request)
 	size_t boundaryPos = request.contentType().find("boundary=");
 	if (boundaryPos != std::string::npos)
 	{
-		request.initBodyMultipart(request.route->upload(), request.contentType().substr(boundaryPos + 9, request.contentType().find(';', boundaryPos + 9) - (boundaryPos + 9)));
+		request.initBodyMultipart(request.route->upload() + request.route->path(), request.contentType().substr(boundaryPos + 9, request.contentType().find(';', boundaryPos + 9) - (boundaryPos + 9)));
 		return 0;
 	}
 	// Use the URI basename as the filename so POST /uploads/foo.txt saves as foo.txt.
 	std::string filename = StringUtils::uriBasename(request.uri().path);
 	if (filename.empty())
-		request.initBodyRaw(request.route->upload());
+		request.initBodyRaw(request.route->upload() + request.route->path());
 	else
-		request.initBodyRaw(request.route->upload(), filename);
+		request.initBodyRaw(request.route->upload() + request.route->path(), filename);
 	return 0;
 }
 

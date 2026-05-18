@@ -90,15 +90,15 @@ void HttpRequestBody::openFile(const std::string &partHeaders)
 	delete file_;
 	file_ = NULL;
 
-	std::string name = extractFilename(partHeaders);
-	if (name.empty())
-	{
-		std::ostringstream ts;
-		ts << "upload_" << std::time(NULL);
-		name = ts.str();
-	}
-	std::string path	= uploadDir_ + "/" + name;
-	file_				= new std::ofstream(path.c_str(), std::ios::binary);
+	std::string base = extractFilename(partHeaders);
+	std::string name;
+	if (!base.empty())
+		name = "upload_" + base;
+	else
+		name = "upload_" + std::to_string(std::time(NULL));
+
+	std::string path = uploadDir_ + "/" + name;
+	file_ = new std::ofstream(path.c_str(), std::ios::binary);
 	if (!file_->is_open())
 	{
 		errorOccurred_	= true;
@@ -142,7 +142,7 @@ void HttpRequestBody::processMultipart(const std::string &chunk)
 		if (uploadState_ == STREAMING)
 		{
 			// check if delimiter is present in buffer
-			size_t delimPos		= headerBuf_.find(delim);
+			size_t delimPos	= headerBuf_.find(delim);
 			if (delimPos != std::string::npos)
 			{
 				// write everything before the delimiter

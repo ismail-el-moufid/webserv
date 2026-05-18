@@ -19,12 +19,13 @@ public:
 	CGIProcess(IOReactor &reactor, Client &client);
 	~CGIProcess();
 
+	int		readFd() const;
+	int		writeFd() const;
+
 	void	onRead();
 	void	onWrite();
 	void	onTimeout();
 
-	int		readFd() const;
-	int		writeFd() const;
 
 	Pipe		stdinPipe;
 	Pipe		stdoutPipe;
@@ -61,7 +62,7 @@ public:
 	static bool	writeStdin(Client &client);
 	static bool	readStdout(Client &client);
 	static void	finish(Client &client);
-	static void	killProcess(Client &client);
+	static void	killProcess(Client &client, int code);
 
 private:
 

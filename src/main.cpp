@@ -1,10 +1,16 @@
 #include "Server.hpp"
 #include <iostream>
 #include <csignal>
+#include <unistd.h>
 
 static volatile sig_atomic_t g_running = 1;
 
-static void onSignal(int) { g_running = 0; }
+static void onSignal(int)
+{
+	write(STDOUT_FILENO, "\r\033[2K", 5);	// CR then erase entire line
+
+	g_running = 0;
+}
 
 int main(int argc, char **argv)
 {

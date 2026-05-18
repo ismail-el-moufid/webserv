@@ -22,8 +22,7 @@ public:
 
 	bool empty() const;
 
-	// timeout_ms: -1 = infinite
-	void waitAndDispatch(int timeToWaitInMS);
+	void waitAndDispatch(int timeToWaitInMS, time_t inactiveTimeout = -1);
 
 private:
 
@@ -46,6 +45,6 @@ private:
 	std::vector<int>			ready_revents_;
 	std::vector<int>			ready_fds_;
 
-	time_t						timeout_; // inactivity threshold in seconds before onTimeout() is called
+	time_t						inactiveTimeout_; // inactivity threshold in seconds before onTimeout() is called
 
 };

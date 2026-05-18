@@ -27,8 +27,8 @@ public:
 	void onWrite();
 	void onTimeout();
 	void onCgiComplete();
+	void onShutdown();
 
-	void clearCgi();
 
 	void sendErrorResponse(HttpStatus::Code code);
 	
@@ -55,6 +55,9 @@ private:
 	Client();
 	Client(const Client &);
 	Client &operator=(const Client &);
+
+	void clearCgi();
+	void beginResponse();
 
 	std::ifstream fileStream_;
 
