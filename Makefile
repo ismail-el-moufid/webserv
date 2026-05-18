@@ -2,7 +2,7 @@ NAME	= webserv
 
 
 CXX			= c++
-CXXFLAGS	= -std=c++98 -Wall -Wextra -Werror
+CXXFLAGS	= -std=c++98 -Wall -Wextra -Werror -MMD -MP
 INCLUDES	= -I include
 PREFIX		= /usr/local
 USER_PREFIX	= $(HOME)/.local
@@ -36,7 +36,7 @@ SRCS			= src/main.cpp \
 
 OBJDIR	= obj
 OBJS	= $(patsubst src/%, $(OBJDIR)/%, $(SRCS:.cpp=.o))
-
+DEPS	= $(OBJS:.o=.d)
 
 CAN_WRITE	= $(shell [ -w $(PREFIX)/bin ] || [ -w $(PREFIX) ] && echo yes || echo no)
 ACTUAL_ROOT	= $(if $(filter yes,$(CAN_WRITE)),$(PREFIX),$(USER_PREFIX))
@@ -119,3 +119,5 @@ fclean: clean
 re: fclean all
 
 .PHONY: all clean fclean re install-sys install-user
+
+-include $(DEPS)

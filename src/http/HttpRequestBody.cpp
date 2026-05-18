@@ -1,5 +1,6 @@
 #include "http/HttpRequestBody.hpp"
 #include "http/HttpStatusCodes.hpp"
+#include "utils/StringUtils.hpp"
 
 #include <unistd.h>
 #include <ctime>
@@ -95,7 +96,7 @@ void HttpRequestBody::openFile(const std::string &partHeaders)
 	if (!base.empty())
 		name = "upload_" + base;
 	else
-		name = "upload_" + std::to_string(std::time(NULL));
+		name = "upload_" + StringUtils::toString(std::time(NULL));
 
 	std::string path = uploadDir_ + "/" + name;
 	file_ = new std::ofstream(path.c_str(), std::ios::binary);
