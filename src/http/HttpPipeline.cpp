@@ -149,17 +149,13 @@ HttpResponse deleteResponse(const HttpRequest &request)
 	struct stat path_stat;
 
 	if (stat(path.c_str(), &path_stat) != 0)
-		return HttpPipeline::errorResponse(request, HttpStatus::NotFound);
+		return HttpResponse::HttpJsonErrorResponse(HttpStatus::NotFound);
 	if (S_ISDIR(path_stat.st_mode))
-		return HttpPipeline::errorResponse(request, HttpStatus::Forbidden);
+		return HttpResponse::HttpJsonResponse(HttpStatus::Forbidden, "cannot delete a directory");
 	if (access(path.c_str(), W_OK) != 0)
-		return HttpPipeline::errorResponse(request, HttpStatus::Forbidden);
+		return HttpResponse::HttpJsonResponse(HttpStatus::Forbidden, "file is not writable");
 	if (std::remove(path.c_str()) == 0)
-	{
-		HttpResponse res;
-		res.setStatus(HttpStatus::NoContent);
-		return res;
-	}
+		return HttpResponse::HttpJsonResponse(HttpStatus::NoContent, "deleted");
 	else
 		return HttpPipeline::errorResponse(request, HttpStatus::InternalServerError);
 }
@@ -191,6 +187,14 @@ bool invalidRequest(const HttpRequest &request, HttpResponse &out, std::string *
 	return false;
 }
 
+bool wantsJsonResponse(const HttpRequest &request)
+{
+	const std::string &m = request.method();
+	if (m == "DELETE" || m == "POST" || m == "PUT")
+		return true;
+	return false;
+}
+
 }
 
 namespace HttpPipeline
@@ -215,9 +219,8 @@ HttpResponse buildResponse(const HttpRequest &request)
 	if (invalidRequest(request, errorHappened, &method))
 		return errorHappened;
 
-	if (!request.route->upload().empty() && (method == "POST" || method == "PUT")) {
-		return HttpResponse::HttpResponseBuilder(HttpStatus::Created, "{\"status\":\"ok\"}", "application/json");
-	}
+	if (!request.route->upload().empty() && (method == "POST" || method == "PUT"))
+		return HttpResponse::HttpJsonResponse(HttpStatus::Created, "file uploaded successfully");
 
 	if (method == "DELETE")
 		return deleteResponse(request);
@@ -299,6 +302,9 @@ void logRequest(const HttpRequest &request, const HttpResponse &response, const 
 
 HttpResponse errorResponse(const HttpRequest &request, HttpStatus::Code code)
 {
+	if (wantsJsonResponse(request))
+		return HttpResponse::HttpJsonErrorResponse(code);
+
 	std::string pagePath;
 
 	if (request.route)

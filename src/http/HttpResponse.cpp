@@ -27,7 +27,7 @@ bool				HttpResponse::hasFile()												const	{ return !filePath_.empty(); }
 
 const std::string	&HttpResponse::filePath()											const	{ return filePath_; }
 
-void			HttpResponse::addCookie(const std::string &value)								{ cookies_.push_back(value); }
+void				HttpResponse::addCookie(const std::string &value)							{ cookies_.push_back(value); }
 
 std::string HttpResponse::serialize() const
 {
@@ -76,6 +76,17 @@ HttpResponse HttpResponse::HttpResponseBuilder(HttpStatus::Code code, const std:
 	res.setContentType(contentType);
 	res.setBody(body);
 	return res;
+}
+
+HttpResponse HttpResponse::HttpJsonResponse(HttpStatus::Code code, const std::string &message)
+{
+	return HttpResponseBuilder(code, "{\"status\":\"" + message + "\"}", "application/json");
+}
+
+HttpResponse HttpResponse::HttpJsonErrorResponse(HttpStatus::Code code)
+{
+	std::string body = "{\"status\":\"error\",\"message\":\"" + HttpStatus::reasonPhrase(code) + "\"}";
+	return HttpResponseBuilder(code, body, "application/json");
 }
 
 void HttpResponse::reset()

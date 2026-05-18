@@ -33,6 +33,8 @@ class HttpResponse
 
 		static HttpResponse HttpErrorResponse(HttpStatus::Code status);
 		static HttpResponse HttpResponseRedirect(HttpStatus::Code status, const std::string &location);
+		static HttpResponse HttpJsonResponse(HttpStatus::Code status, const std::string &message);
+		static HttpResponse HttpJsonErrorResponse(HttpStatus::Code status);
 		static HttpResponse HttpResponseBuilder(HttpStatus::Code status, const std::string &body, const std::string &contentType);
 
 	private:
